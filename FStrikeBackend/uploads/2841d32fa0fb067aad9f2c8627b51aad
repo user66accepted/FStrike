@@ -1,0 +1,213 @@
+import streamlit as st
+import os
+import tempfile
+from dotenv import load_dotenv
+
+# LangChain-related imports
+from langchain_chroma import Chroma
+from langchain_groq import ChatGroq
+from langchain_ollama import OllamaEmbeddings
+from langchain.chains import create_retrieval_chain
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_community.document_loaders import PyMuPDFLoader
+
+# Load environment variables if any
+load_dotenv()
+
+# ---------------------------
+# Initialize Session State
+# ---------------------------
+if 'vectors' not in st.session_state:
+    st.session_state.vectors = None
+if 'history' not in st.session_state:
+    st.session_state.history = []
+if 'user_data_context' not in st.session_state:
+    st.session_state.user_data_context = {}
+
+# ---------------------------
+# Initialize LLM & Chat Template
+# ---------------------------
+groq_api_key = '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'
+llm = ChatGroq(
+    groq_api_key=groq_api_key,
+    model_name="llama-3.3-70b-versatile",
+    max_retries=2,
+)
+
+chat_template = ChatPromptTemplate.from_template("""
+Answer the questions based on the provided context only. Act like a university professor. 
+If the topic is unrelated to the context, reply with: "I'm sorry, I have no knowledge about that."
+
+<CONTEXT>
+{context}
+</CONTEXT>
+Questions: {input}
+""")
+
+# ---------------------------
+# Define Functions
+# ---------------------------
+def check_existing_vectors():
+    """Check if the Chroma DB directory exists and has stored vectors."""
+    persist_directory = "chroma_db"
+    return os.path.exists(persist_directory) and os.listdir(persist_directory)
+
+def load_existing_vectors():
+    """Load existing vectors from ChromaDB and verify stored data."""
+    persist_directory = "chroma_db"
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    vector_store = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
+
+    # Check if the database contains vectors
+    stored_docs = vector_store._collection.count()
+    if stored_docs == 0:
+        st.error("ChromaDB appears to be empty! No vectors found.")
+        return None
+
+    st.write(f"✅ Loaded {stored_docs} document vectors from ChromaDB.")
+    return vector_store
+
+
+def vector_embedding(uploaded_pdf):
+    """Processes the PDF and creates a vector store in ChromaDB."""
+    persist_directory = "chroma_db"
+    
+    # Delete old vectors if user chooses to reprocess
+    if os.path.exists(persist_directory):
+        import shutil
+        shutil.rmtree(persist_directory)
+    
+    os.makedirs(persist_directory, exist_ok=True)
+
+    # Write uploaded PDF to a temporary file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(uploaded_pdf.getvalue())
+        tmp_path = tmp.name
+
+    # Load the PDF
+    loader = PyMuPDFLoader(tmp_path)
+    docs = loader.load()
+
+    if not docs:
+        st.error("No documents could be loaded from the PDF.")
+        return None
+
+    st.write(f"Loaded {len(docs)} document(s) from the PDF.")
+
+    # Split documents into chunks
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=2000, chunk_overlap=500)
+    final_documents = text_splitter.split_documents(docs)
+    st.write(f"Created {len(final_documents)} document chunks.")
+
+    # Assign unique IDs to each chunk
+    for idx, doc in enumerate(final_documents):
+        doc.metadata['id'] = f"doc_{idx}"
+
+    # Create vector store
+    embeddings = OllamaEmbeddings(model="nomic-embed-text")
+    vectors = Chroma.from_documents(
+        documents=final_documents,
+        embedding=embeddings,
+        collection_name="local-rag",
+        persist_directory=persist_directory
+    )
+
+    vectors.persist()
+    return vectors
+
+def get_retrieved_context(query):
+    """Retrieve relevant context from the vector store."""
+    if st.session_state.vectors is None:
+        return "No document context available. Please train on a PDF first."
+
+    document_chain = create_stuff_documents_chain(llm, chat_template)
+    retriever = st.session_state.vectors.as_retriever(search_kwargs={"k": 10})
+    
+    # Test retrieval manually
+    retrieved_docs = retriever.get_relevant_documents(query)
+    if not retrieved_docs:
+        st.warning("⚠️ No relevant documents were retrieved.")
+        return "No relevant context found."
+    
+    # Print out retrieved document content
+    st.write("🔍 Retrieved Context from Chroma:")
+    for doc in retrieved_docs:
+        st.write(f"- {doc.page_content[:300]}...")  # Show first 300 characters
+    
+    # Use retrieval chain
+    retrieval_chain = create_retrieval_chain(retriever, document_chain)
+    try:
+        response = retrieval_chain.invoke({'input': query})
+        return response.get('answer', '')
+    except Exception as e:
+        st.write(f"Error retrieving context: {e}")
+        return ''
+
+
+# ---------------------------
+# Streamlit App UI
+# ---------------------------
+st.title("PDF-Based Q&A")
+
+# Check if vectors already exist
+vectors_exist = check_existing_vectors()
+
+if vectors_exist:
+    st.info("Previously processed vectors found in ChromaDB.")
+    load_existing = st.checkbox("Load existing vectors instead of training a new one?", value=True)
+    
+    if load_existing:
+        with st.spinner("Loading existing vector store..."):
+            st.session_state.vectors = load_existing_vectors()
+        st.success("Existing vector store loaded successfully!")
+
+st.markdown("### Step 1: Upload and Train on a PDF Document")
+uploaded_pdf = st.file_uploader("Upload a PDF Document", type=["pdf"])
+
+if uploaded_pdf is not None and not (vectors_exist and load_existing):
+    st.info("PDF selected. Click the button below to process and train on this document.")
+    if st.button("Train on PDF"):
+        with st.spinner("Processing and training on the PDF..."):
+            vectors = vector_embedding(uploaded_pdf)
+            if vectors is not None:
+                st.session_state.vectors = vectors
+                st.success("PDF processed successfully. The vector store is ready!")
+            else:
+                st.error("Failed to process the PDF.")
+
+st.markdown("---")
+st.markdown("### Step 2: Ask Questions Based on the Trained PDF")
+
+user_question = st.text_input("Enter your question here:")
+
+if st.button("Submit Question"):
+    if not user_question:
+        st.error("Please enter a question before submitting.")
+    elif st.session_state.vectors is None:
+        st.error("No document is currently trained. Please upload and train on a PDF first.")
+    else:
+        st.session_state.history.append(("human", user_question))
+        if len(st.session_state.history) > 12:
+            st.session_state.history.pop(0)
+
+        retrieved_context = get_retrieved_context(user_question)
+
+        formatted_context = "\n".join(f"{role}: {msg}" for role, msg in st.session_state.history)
+        formatted_context += "\n" + retrieved_context
+        
+        if st.session_state.user_data_context:
+            formatted_context += f"\nUser data: {st.session_state.user_data_context}"
+        
+        formatted_prompt = chat_template.format(context=formatted_context, input=user_question)
+
+        try:
+            llm_response = llm.invoke(formatted_prompt)
+            ai_response = llm_response.content
+        except Exception as e:
+            st.write(f"Error during LLM invocation: {e}")
+            ai_response = "Sorry, there was an error processing your request."
+
+        st.markdown("#### Answer:")
+        st.write(ai_response)
