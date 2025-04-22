@@ -207,16 +207,16 @@ const logClick = (campaignId, landingPageId, req) => {
  */
 const storeFormSubmission = (campaignId, landingPageId, formData, req) => {
   // Check if FormFields table has the field_type column
-  db.get("PRAGMA table_info(FormFields)", [], (err, rows) => {
+  db.all("PRAGMA table_info(FormFields)", [], (err, rows) => {
     if (err) {
       console.error('Error checking FormFields table schema:', err);
       return;
     }
     
     // If field_type column doesn't exist, add it
-    const hasFieldTypeColumn = rows && rows.some(row => row.name === 'field_type');
+    const hasFieldTypeColumn = rows.some(row => row.name === 'field_type');
     if (!hasFieldTypeColumn) {
-      db.run("ALTER TABLE FormFields ADD COLUMN field_type TEXT", (alterErr) => {
+      db.run("ALTER TABLE FormFields ADD COLUMN field_type TEXT DEFAULT NULL", (alterErr) => {
         if (alterErr) {
           console.error('Error adding field_type column:', alterErr);
         } else {
@@ -521,7 +521,7 @@ const getCampaignClicks = (campaignId) => {
  * @param {number} pageSize - Number of entries per page
  * @returns {Promise<Object>} - Paginated form submission data
  */
-const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 3) => {
+const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
   return new Promise((resolve, reject) => {
     // Check if the table exists first
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='FormSubmissions'", [], (err, tableExists) => {
@@ -606,6 +606,9 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 3) => {
                     
                     // Return when all submissions have been processed
                     if (processed === submissions.length) {
+                      // Sort submissions by created_at in descending order
+                      submissionsWithFields.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                      
                       resolve({
                         submissions: submissionsWithFields,
                         totalCount,
