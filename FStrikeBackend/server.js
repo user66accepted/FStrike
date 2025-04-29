@@ -122,6 +122,10 @@ io.on('connection', (socket) => {
   });
 });
 
+app.get('/', (req, res) => {
+  res.json({ status: 'Backend is running' });
+});
+
 // Catch-all for undefined routes - always returns JSON
 app.use((req, res) => {
   res.status(404).json({ message: 'Not Found' });
