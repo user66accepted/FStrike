@@ -99,8 +99,13 @@ const createLandingPageRouter = (landingPage, campaignId) => {
       storeFormSubmission(campaignId, landingPage.id, formData, req);
       
       if (landingPage.capture_submitted_data && landingPage.redirect_url) {
-        console.log(`Redirecting to: ${landingPage.redirect_url}`);
-        return res.redirect(landingPage.redirect_url);
+        let redirectUrl = landingPage.redirect_url;
+        // Add protocol if not present
+        if (!redirectUrl.startsWith('http://') && !redirectUrl.startsWith('https://')) {
+          redirectUrl = 'https://' + redirectUrl;
+        }
+        console.log(`Redirecting to: ${redirectUrl}`);
+        return res.redirect(redirectUrl);
       } else {
         console.log('Redirecting back to original URL:', req.originalUrl);
         return res.redirect(req.originalUrl);
