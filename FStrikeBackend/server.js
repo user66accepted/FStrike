@@ -25,9 +25,8 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: 'http://161.97.104.136:5173',
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
@@ -40,8 +39,7 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({
-  origin: 'http://161.97.104.136:5173',
-  credentials: true,
+  origin: "*",
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ["Content-Type", "Authorization"]
 }));
