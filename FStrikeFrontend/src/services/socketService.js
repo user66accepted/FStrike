@@ -14,7 +14,7 @@ const socket = io(baseUrl, {
   autoConnect: true,
   transports: ['polling', 'websocket'],
   extraHeaders: {
-    'Origin': 'http://192.168.15.147:5173'
+    'Origin': 'http://161.97.104.136:5173'
   }
 });
 
