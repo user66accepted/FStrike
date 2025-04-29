@@ -81,7 +81,7 @@ const addEventListener = (event, callback) => {
 const removeEventListener = (event, callback) => {
   if (eventListeners[event]) {
     eventListeners[event] = eventListeners[event].filter(cb => cb !== callback);
-    console.log(`Removed listener for ${event, remaining listeners: ${eventListeners[event].length}`);
+    console.log(`Removed listener for ${event}, remaining listeners: ${eventListeners[event].length}`);
   }
 };
 
