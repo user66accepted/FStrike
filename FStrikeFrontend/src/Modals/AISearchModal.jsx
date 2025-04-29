@@ -25,8 +25,8 @@ function AISearchModal({ show, onClose, onSelectPerson, onSelectOrganization }) 
     
     try {
       const endpoint = searchType === "person" ? 
-        "http://192.168.15.147:5000/api/search-person" : 
-        "http://192.168.15.147:5000/api/search-organization";
+        "http://161.97.104.136:5000/api/search-person" : 
+        "http://161.97.104.136:5000/api/search-organization";
       
       const response = await fetch(endpoint, {
         method: "POST",

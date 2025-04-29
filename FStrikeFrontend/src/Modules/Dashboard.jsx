@@ -275,10 +275,6 @@ const Dashboard = () => {
         )}
       </div>
 
-      {/* Recent Campaigns Section */}
-      <div className="mt-8">
-        <RecentCampaigns />
-      </div>
     </div>
   );
 };

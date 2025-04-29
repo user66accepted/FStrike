@@ -41,7 +41,7 @@ const LandingPages = () => {
     if (!selectedPage) return;
     try {
       const response = await fetch(
-        `http://192.168.15.147:5000/api/DeleteLandingPage/${selectedPage.id}`,
+        `http://161.97.104.136:5000/api/DeleteLandingPage/${selectedPage.id}`,
         {
           method: "DELETE",
         }

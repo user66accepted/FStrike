@@ -33,7 +33,7 @@ export default function SendingProfiles() {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this profile?")) return;
     try {
-      const res = await fetch(`http://192.168.15.147:5000/api/DeleteProfile/${id}`, {
+      const res = await fetch(`http://161.97.104.136:5000/api/DeleteProfile/${id}`, {
         method: "DELETE",
       });
       if (!res.ok) throw new Error("Delete failed");
@@ -45,7 +45,7 @@ export default function SendingProfiles() {
 
   const handleEdit = async (id) => {
     try {
-      const res = await fetch(`http://192.168.15.147:5000/api/GetProfile/${id}`);
+      const res = await fetch(`http://161.97.104.136:5000/api/GetProfile/${id}`);
       if (!res.ok) throw new Error("Failed to load profile");
       const { profile, headers } = await res.json();
       setSelectedProfile({ ...profile, headers });

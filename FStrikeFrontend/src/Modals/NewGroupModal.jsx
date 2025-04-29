@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { FaPlus, FaFileCsv, FaTrash, FaRobot } from "react-icons/fa";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
@@ -10,7 +10,7 @@ const isValidEmail = (email) => {
   return regex.test(email);
 };
 
-function NewGroupModal({ show, onClose, onSave }) {
+function NewGroupModal({ show, onClose, onSave, editData }) {
   // Group name
   const [groupName, setGroupName] = useState("");
 
@@ -35,6 +35,18 @@ function NewGroupModal({ show, onClose, onSave }) {
 
   // Ref for hidden file input
   const fileInputRef = useRef(null);
+
+  // Load edit data if provided
+  useEffect(() => {
+    if (editData) {
+      setGroupName(editData.name);
+      setUsers(editData.users);
+    } else {
+      // Reset form when opening for new group
+      setGroupName("");
+      setUsers([]);
+    }
+  }, [editData]);
 
   // Filter users based on search
   const filteredUsers = users.filter((user) => {
@@ -63,17 +75,13 @@ function NewGroupModal({ show, onClose, onSave }) {
     setLastName("");
     setEmail("");
     setPosition("");
-    // If we just added to the last page, ensure we show it
-    if (currentPage === totalPages) {
-      setCurrentPage(totalPages);
-    }
   };
 
   const handleDeleteUser = (userIndex) => {
     setUsers((prevUsers) => prevUsers.filter((_, idx) => idx !== userIndex));
   };
 
-  // Updated save handler with validations and POST request
+  // Updated save handler with validations and POST/PUT request
   const handleSaveChanges = async () => {
     if (!groupName.trim()) {
       alert("Please provide a group name.");
@@ -83,20 +91,28 @@ function NewGroupModal({ show, onClose, onSave }) {
       alert("Please add at least one user.");
       return;
     }
+
     const payload = { groupName, users };
+    if (editData?.id) {
+      payload.groupId = editData.id;
+    }
+
     try {
       const response = await fetch("http://161.97.104.136:5000/api/SaveUserGroup", {
-        method: "POST",
+        method: editData?.id ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
       });
+      
       if (!response.ok) {
         throw new Error("Failed to save group. Server responded with an error.");
       }
-      // Optionally notify parent via onSave callback if needed
-      onSave(payload);
+      
+      // Call the onSave callback with the response data
+      const data = await response.json();
+      onSave(data);
       onClose();
     } catch (error) {
       alert("Error saving group: " + error.message);
@@ -137,14 +153,11 @@ function NewGroupModal({ show, onClose, onSave }) {
         skipEmptyLines: true,
         complete: function (results) {
           const headers = results.meta.fields;
-          if (
-            !headers ||
-            validHeaders.some((header) => !headers.includes(header))
-          ) {
+          if (!headers || validHeaders.some((header) => !headers.includes(header))) {
             alert("CSV file does not contain the required columns.");
             return;
           }
-          // Filter out rows with invalid email and map valid rows
+          
           const importedUsers = results.data.reduce((acc, row) => {
             if (isValidEmail(row["Email"])) {
               acc.push({
@@ -156,6 +169,7 @@ function NewGroupModal({ show, onClose, onSave }) {
             }
             return acc;
           }, []);
+
           if (importedUsers.length === 0) {
             alert("No valid users found in the CSV file.");
             return;
@@ -166,10 +180,7 @@ function NewGroupModal({ show, onClose, onSave }) {
           alert("Error parsing CSV file: " + error.message);
         },
       });
-    } else if (
-      fileName.endsWith(".xls") ||
-      fileName.endsWith(".xlsx")
-    ) {
+    } else if (fileName.endsWith(".xls") || fileName.endsWith(".xlsx")) {
       const reader = new FileReader();
       reader.onload = (evt) => {
         const bstr = evt.target.result;
@@ -184,9 +195,7 @@ function NewGroupModal({ show, onClose, onSave }) {
         }
 
         const headers = jsonData[0];
-        if (
-          validHeaders.some((header, idx) => headers[idx] !== header)
-        ) {
+        if (validHeaders.some((header, idx) => headers[idx] !== header)) {
           alert("Excel file does not contain the required columns in the correct order.");
           return;
         }
@@ -244,7 +253,6 @@ function NewGroupModal({ show, onClose, onSave }) {
         email: employee.email || "",
         position: employee.position || "",
       }));
-      
       setUsers((prevUsers) => [...prevUsers, ...newUsers]);
     }
   };
@@ -263,7 +271,7 @@ function NewGroupModal({ show, onClose, onSave }) {
       <div className="relative bg-white rounded-lg shadow-lg w-full max-w-3xl p-6">
         {/* Header */}
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-3xl font-semibold">New Group</h2>
+          <h2 className="text-3xl font-semibold">{editData ? 'Edit Group' : 'New Group'}</h2>
           <button
             className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
             onClick={onClose}

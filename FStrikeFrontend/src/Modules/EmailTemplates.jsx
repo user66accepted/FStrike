@@ -47,7 +47,7 @@ const EmailTemplates = () => {
   const handleDelete = async () => {
     if (!selectedTemplate) return;
     try {
-      const res = await fetch(`http://192.168.15.147:5000/api/DeleteEmailTemplate/${selectedTemplate.id}`, {
+      const res = await fetch(`http://161.97.104.136:5000/api/DeleteEmailTemplate/${selectedTemplate.id}`, {
         method: "DELETE",
       });
       if (!res.ok) {

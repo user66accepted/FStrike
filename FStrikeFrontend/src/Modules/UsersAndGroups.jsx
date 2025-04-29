@@ -8,6 +8,7 @@ const UsersAndGroups = () => {
   const [showModal, setShowModal] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState(null);
+  const [groupToEdit, setGroupToEdit] = useState(null);
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(false);
 
@@ -29,18 +30,55 @@ const UsersAndGroups = () => {
     }
   };
 
+  // Fetch group details for editing
+  const fetchGroupDetails = async (groupId) => {
+    try {
+      const response = await fetch(`http://161.97.104.136:5000/api/GetGroupUsers/${groupId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch group details");
+      }
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Error fetching group details:", error);
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchGroups();
   }, []);
 
   // Close the NewGroupModal
-  const handleClose = () => setShowModal(false);
+  const handleClose = () => {
+    setShowModal(false);
+    setGroupToEdit(null);
+  };
 
   // Handle saving data from the NewGroupModal and refresh groups list
   const handleSave = (data) => {
     console.log("Modal Data:", data);
     setShowModal(false);
+    setGroupToEdit(null);
     fetchGroups();
+  };
+
+  // When edit button is clicked
+  const handleEditClick = async (group) => {
+    const groupDetails = await fetchGroupDetails(group.id);
+    if (groupDetails) {
+      setGroupToEdit({
+        id: group.id,
+        name: group.group_name,
+        users: groupDetails.users.map(user => ({
+          firstName: user.first_name,
+          lastName: user.last_name,
+          email: user.email,
+          position: user.position
+        }))
+      });
+      setShowModal(true);
+    }
   };
 
   // When delete icon is clicked, open the delete modal
@@ -55,7 +93,7 @@ const UsersAndGroups = () => {
 
     try {
       const response = await fetch(
-        `http://192.168.15.147:5000/api/DeleteUserGroup/${groupToDelete.id}`,
+        `http://161.97.104.136:5000/api/DeleteUserGroup/${groupToDelete.id}`,
         { method: "DELETE" }
       );
       if (!response.ok) {
@@ -133,7 +171,10 @@ const UsersAndGroups = () => {
                   {new Date(group.created_at).toLocaleString()}
                 </td>
                 <td className="p-2 flex gap-2">
-                  <button className="bg-teal-500 text-white p-2 rounded hover:bg-teal-600 cursor-pointer">
+                  <button 
+                    className="bg-teal-500 text-white p-2 rounded hover:bg-teal-600 cursor-pointer"
+                    onClick={() => handleEditClick(group)}
+                  >
                     <FaEdit />
                   </button>
                   <button
@@ -175,6 +216,7 @@ const UsersAndGroups = () => {
           show={showModal}
           onClose={handleClose}
           onSave={handleSave}
+          editData={groupToEdit}
         />
       )}
 
