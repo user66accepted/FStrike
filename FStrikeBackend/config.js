@@ -4,7 +4,7 @@ const config = {
   port: process.env.PORT || 5000,
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
-  // Tracking configuration
+  // Tracking configuration - force HTTP
   trackingUrl: 'http://cyber-advisory.info:5000',
   
   // Ngrok configuration

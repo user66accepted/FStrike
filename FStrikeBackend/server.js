@@ -37,24 +37,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Apply security, CORS, logging, and JSON parsing middleware
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" },
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:", "http:"],
-      connectSrc: ["'self'", "http:", "https:"],
-      formAction: ["'self'", "http:", "https:"],
-      frameAncestors: ["'none'"]
-    }
-  }
+  // Disable HTTPS requirements and strict security policies
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
+  originAgentCluster: false,
+  strictTransportSecurity: false
 }));
 
+// Configure CORS to be completely open
 app.use(cors({
-  origin: "*",
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+  allowedHeaders: ['*'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
 }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '300mb' }));

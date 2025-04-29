@@ -22,6 +22,17 @@ const createLandingPageRouter = (landingPage, campaignId) => {
   console.log(`Creating router for landing page: ${landingPage.page_name} (ID: ${landingPage.id})`);
   console.log(`HTML content size: ${landingPage.html_content ? landingPage.html_content.length : 0} bytes`);
 
+  // Add CORS headers to all routes
+  router.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', '*');
+    res.header('Access-Control-Allow-Headers', '*');
+    res.header('Cross-Origin-Opener-Policy', 'unsafe-none');
+    res.header('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    res.header('Origin-Agent-Cluster', '?0');
+    next();
+  });
+
   // Track page loads/link clicks
   router.get('*', (req, res, next) => {
     db.get(
@@ -53,9 +64,12 @@ const createLandingPageRouter = (landingPage, campaignId) => {
     console.log(`Serving landing page for campaign ${campaignId} at path: ${req.originalUrl}`);
     res.set({
       'Content-Type': 'text/html',
-      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
       'Pragma': 'no-cache',
-      'Expires': '0'
+      'Expires': '0',
+      'Cross-Origin-Opener-Policy': 'unsafe-none',
+      'Cross-Origin-Embedder-Policy': 'unsafe-none',
+      'Origin-Agent-Cluster': '?0'
     });
     const processedHtml = processLandingPageHtml(
       landingPage.html_content,
@@ -272,8 +286,8 @@ const hostLandingPage = (landingPageId, campaignId) => {
         // Store the router with its unique path
         activeLandingPages.set(pagePath, router);
 
-        // Use the VPS URL directly instead of ngrok
-        const baseUrl = config.trackingUrl;
+        // Ensure HTTP is used
+        const baseUrl = config.trackingUrl.replace('https://', 'http://');
         const fullUrl = `${baseUrl}${pagePath}`;
         console.log(`Generated landing page URL: ${fullUrl}`);
 

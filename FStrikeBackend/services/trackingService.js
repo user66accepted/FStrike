@@ -20,13 +20,26 @@ const TRANSPARENT_PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1H
 
 // Function to generate a tracking URL for a particular email/campaign
 const generateTrackingUrl = async (pixelId) => {
-  return `${config.trackingUrl}/tracker/${pixelId}.png?t=${Date.now()}`;
+  // Ensure HTTP is used and strip any HTTPS
+  const baseUrl = config.trackingUrl.replace('https://', 'http://');
+  return `${baseUrl}/tracker/${pixelId}.png?t=${Date.now()}`;
 };
 
 // Handle email open events
 const logOpen = async (pixelId, req, res, io) => {
   console.log(`📊 Web bug requested: ${pixelId}`);
   console.log(`📋 Request headers:`, JSON.stringify(req.headers, null, 2));
+  
+  // Set headers to prevent caching and CORS issues
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': '*',
+    'Access-Control-Allow-Headers': '*',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Surrogate-Control': 'no-store'
+  });
   
   // Debug database access
   db.get(`SELECT COUNT(*) as count FROM tracking_pixels`, [], (err, result) => {
