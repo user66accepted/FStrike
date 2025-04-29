@@ -28,15 +28,9 @@ const logOpen = async (pixelId, req, res, io) => {
   console.log(`📊 Web bug requested: ${pixelId}`);
   console.log(`📋 Request headers:`, JSON.stringify(req.headers, null, 2));
   
-  // Debug database access
-  db.get(`SELECT COUNT(*) as count FROM tracking_pixels`, [], (err, result) => {
-    if (err) {
-      console.error('❌ Database error checking tracking pixels:', err);
-    } else {
-      console.log(`ℹ️ Total tracking pixels in database: ${result.count}`);
-    }
-  });
-  
+  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  const ua = req.get('User-Agent');
+
   // 1) Verify pixel exists and get user email
   db.get(
     `SELECT tp.id, tp.user_email, tp.campaign_id, c.name as campaign_name 
@@ -45,28 +39,9 @@ const logOpen = async (pixelId, req, res, io) => {
      WHERE tp.id = ?`,
     [pixelId],
     async (err, row) => {
-      if (err) {
+      if (err || !row) {
         console.error('❌ Error verifying pixel:', err);
         // Always return a pixel image even on error
-        res.set('Content-Type', 'image/png');
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
-        return res.send(TRANSPARENT_PIXEL);
-      }
-      if (!row) {
-        console.error('❌ Pixel not found:', pixelId);
-        // Check if pixel exists at all
-        db.get('SELECT id FROM tracking_pixels WHERE id = ?', [pixelId], (err, result) => {
-          if (err) {
-            console.error('❌ Error checking if pixel exists:', err);
-          } else if (!result) {
-            console.error('❌ Pixel definitely does not exist in database');
-          } else {
-            console.error('⚠️ Pixel exists but joining with Campaigns failed');
-          }
-        });
-        // Always return a pixel
         res.set('Content-Type', 'image/png');
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         res.set('Pragma', 'no-cache');
@@ -76,62 +51,59 @@ const logOpen = async (pixelId, req, res, io) => {
 
       console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}`);
 
-      // 2) Log the "open"
-      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-      const ua = req.get('User-Agent');
-      db.run(
-        `INSERT INTO open_logs (pixel_id, ip, userAgent) VALUES (?, ?, ?)`,
-        [pixelId, ip, ua],
-        async function(err) {
-          if (err) {
-            console.error('❌ Error logging open:', err);
-            // Still return a pixel image to avoid errors in email clients
-            res.set('Content-Type', 'image/png');
-            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            res.set('Pragma', 'no-cache');
-            res.set('Expires', '0');
-            return res.send(TRANSPARENT_PIXEL);
-          }
-          
-          console.log(`✅ Successfully logged open with ID: ${this.lastID} for pixel: ${pixelId}`);
-          
-          // Log email opened
-          console.log(`📧 Email opened by: ${row.user_email} for campaign: ${row.campaign_name} (ID: ${row.campaign_id})`);
-          
-          // Emit socket event if io is provided
-          if (io) {
-            const openData = {
-              campaignId: row.campaign_id,
-              campaignName: row.campaign_name,
-              userEmail: row.user_email,
-              timestamp: new Date().toISOString(),
-              ip: ip,
-              userAgent: ua
-            };
-            
-            io.emit('email:opened', openData);
-            console.log('🔔 Emitted email:opened event:', openData);
+      // Check if this is a unique open (same email + IP hasn't opened before)
+      db.get(
+        `SELECT COUNT(*) as count
+         FROM open_logs ol
+         JOIN tracking_pixels tp ON ol.pixel_id = tp.id
+         WHERE tp.user_email = ? AND ol.ip = ? AND tp.campaign_id = ?`,
+        [row.user_email, ip, row.campaign_id],
+        (countErr, countRow) => {
+          if (!countErr && countRow.count === 0) {
+            // This is a unique open, log it
+            db.run(
+              `INSERT INTO open_logs (pixel_id, ip, userAgent) VALUES (?, ?, ?)`,
+              [pixelId, ip, ua],
+              async function(err) {
+                if (err) {
+                  console.error('❌ Error logging open:', err);
+                } else {
+                  console.log(`✅ Successfully logged unique open with ID: ${this.lastID} for pixel: ${pixelId}`);
+                  
+                  if (io) {
+                    const openData = {
+                      campaignId: row.campaign_id,
+                      campaignName: row.campaign_name,
+                      userEmail: row.user_email,
+                      timestamp: new Date().toISOString(),
+                      ip: ip,
+                      userAgent: ua
+                    };
+                    io.emit('email:opened', openData);
+                  }
+                }
+                
+                // Return the tracking pixel
+                try {
+                  const webBug = generateWebBug();
+                  res.set('Content-Type', 'image/png');
+                  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+                  res.set('Pragma', 'no-cache');
+                  res.set('Expires', '0');
+                  res.set('Last-Modified', (new Date()).toUTCString());
+                  res.send(webBug);
+                } catch (error) {
+                  console.error('❌ Error generating web bug:', error);
+                  res.send(TRANSPARENT_PIXEL);
+                }
+              }
+            );
           } else {
-            console.log('⚠️ Socket.io not available, cannot emit real-time event');
-          }
-          
-          try {
-            // 3) Generate and return 1x1 transparent pixel
-            const webBug = generateWebBug();
+            // Not a unique open, just return the pixel
             res.set('Content-Type', 'image/png');
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             res.set('Pragma', 'no-cache');
             res.set('Expires', '0');
-            res.set('Last-Modified', (new Date()).toUTCString());
-            res.send(webBug);
-          } catch (error) {
-            console.error('❌ Error generating web bug:', error);
-            // Fallback to static transparent pixel
-            res.set('Content-Type', 'image/png');
-            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            res.set('Pragma', 'no-cache');
-            res.set('Expires', '0');
-            res.set('Last-Modified', (new Date()).toUTCString());
             res.send(TRANSPARENT_PIXEL);
           }
         }

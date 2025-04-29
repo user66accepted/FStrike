@@ -128,24 +128,46 @@ const createLandingPageRouter = (landingPage, campaignId) => {
  */
 const logClick = (campaignId, landingPageId, req) => {
   console.log(`Logging link click for campaign ${campaignId}, landing page ${landingPageId}`);
+  
+  const ip = req.ip;
+  const ua = req.headers['user-agent'];
 
-  const query = `
-    INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
-    VALUES (?, ?, ?, ?)
-  `;
+  // First check if this IP has already clicked in this campaign
+  db.get(
+    `SELECT COUNT(*) as count 
+     FROM link_clicks 
+     WHERE campaign_id = ? AND ip_address = ?`,
+    [campaignId, ip],
+    (err, row) => {
+      if (err) {
+        console.error('Error checking for existing clicks:', err);
+        return;
+      }
 
-  db.run(query, [
-    campaignId,
-    landingPageId,
-    req.ip,
-    req.headers['user-agent']
-  ], (err) => {
-    if (err) {
-      console.error('Error logging link click:', err);
-    } else {
-      console.log('Link click logged successfully');
+      // Only log if this is a unique click from this IP
+      if (row.count === 0) {
+        const query = `
+          INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
+          VALUES (?, ?, ?, ?)
+        `;
+
+        db.run(query, [
+          campaignId,
+          landingPageId,
+          ip,
+          ua
+        ], (err) => {
+          if (err) {
+            console.error('Error logging unique link click:', err);
+          } else {
+            console.log('Unique link click logged successfully');
+          }
+        });
+      } else {
+        console.log('Ignoring duplicate click from IP:', ip);
+      }
     }
-  });
+  );
 };
 
 /**
