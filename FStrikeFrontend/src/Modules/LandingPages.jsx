@@ -9,6 +9,7 @@ const LandingPages = () => {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [selectedPage, setSelectedPage] = useState(null);
   const [showNewTemplateModal, setShowNewTemplateModal] = useState(false);
+  const [editingPage, setEditingPage] = useState(null);
 
   // Function to refresh the list of landing pages
   const refreshLandingPages = async () => {
@@ -60,13 +61,31 @@ const LandingPages = () => {
     }
   };
 
+  // Handle edit button click
+  const handleEditClick = async (page) => {
+    try {
+      const response = await fetch(`http://161.97.104.136:5000/api/GetLandingPage/${page.id}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch page details');
+      }
+      const pageDetails = await response.json();
+      setEditingPage(pageDetails);
+      setShowNewTemplateModal(true);
+    } catch (error) {
+      console.error("Error fetching page details:", error);
+      alert("Error loading page details");
+    }
+  };
+
   // New Template Modal Handlers
   const handleOpenNewTemplateModal = () => {
+    setEditingPage(null);
     setShowNewTemplateModal(true);
   };
 
   const handleCloseNewTemplateModal = () => {
     setShowNewTemplateModal(false);
+    setEditingPage(null);
   };
 
   return (
@@ -115,7 +134,10 @@ const LandingPages = () => {
                   {new Date(page.created_at).toLocaleString()}
                 </td>
                 <td className="p-2 flex gap-2">
-                  <button className="bg-teal-500 text-white p-2 rounded hover:bg-teal-600 cursor-pointer">
+                  <button
+                    className="bg-teal-500 text-white p-2 rounded hover:bg-teal-600 cursor-pointer"
+                    onClick={() => handleEditClick(page)}
+                  >
                     <FaEdit />
                   </button>
                   <button className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 cursor-pointer">
@@ -175,6 +197,7 @@ const LandingPages = () => {
         isOpen={showNewTemplateModal}
         onClose={handleCloseNewTemplateModal}
         onSave={refreshLandingPages}
+        editData={editingPage}
       />
     </div>
   );

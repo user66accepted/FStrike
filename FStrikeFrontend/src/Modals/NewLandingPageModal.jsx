@@ -1,14 +1,30 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaFileImport } from "react-icons/fa";
 import RichTextEditor from "../Utils/RichTextEditor";
 import ImportSiteModal from "./ImportSiteModal";
 
-const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
+const NewLandingPageModal = ({ isOpen, onClose, onSave, editData }) => {
     const [pageName, setPageName] = useState("");
     const [htmlContent, setHtmlContent] = useState("");
     const [showImportModal, setShowImportModal] = useState(false);
     const [captureSubmittedData, setCaptureSubmittedData] = useState(false);
     const [redirectTo, setRedirectTo] = useState("");
+
+    // Load edit data if provided
+    useEffect(() => {
+        if (editData) {
+            setPageName(editData.page_name);
+            setHtmlContent(editData.html_content);
+            setCaptureSubmittedData(editData.capture_submitted_data === 1);
+            setRedirectTo(editData.redirect_url || "");
+        } else {
+            // Reset form when opening for new page
+            setPageName("");
+            setHtmlContent("");
+            setCaptureSubmittedData(false);
+            setRedirectTo("");
+        }
+    }, [editData]);
 
     // Handles successful email import from modal
     const handleImportEmailSuccess = (importedData) => {
@@ -50,8 +66,12 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
         };
 
         try {
-            const response = await fetch("http://161.97.104.136:5000/api/SavePage", {
-                method: "POST",
+            const url = editData 
+                ? `http://161.97.104.136:5000/api/UpdatePage/${editData.id}`
+                : "http://161.97.104.136:5000/api/SavePage";
+                
+            const response = await fetch(url, {
+                method: editData ? "PUT" : "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
@@ -60,15 +80,16 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
 
             if (!response.ok) {
                 const errorData = await response.json();
-                console.error("Error saving page:", errorData.error);
+                throw new Error(errorData.error || "Failed to save page");
             } else {
                 const result = await response.json();
-                console.log("Page saved successfully:", result);
+                console.log(editData ? "Page updated successfully:" : "Page saved successfully:", result);
                 if (onSave) onSave();
                 onClose();
             }
         } catch (error) {
             console.error("Error saving page:", error);
+            alert(error.message);
         }
     };
 
@@ -78,7 +99,7 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-30 backdrop-blur-md">
             <div className="bg-white w-full max-w-4xl rounded-lg shadow-lg max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center p-4 border-b border-gray-300">
-                    <h2 className="text-3xl font-semibold">New Landing Page</h2>
+                    <h2 className="text-3xl font-semibold">{editData ? 'Edit Landing Page' : 'New Landing Page'}</h2>
                     <button onClick={onClose} className="text-gray-500 hover:text-gray-700 transition">&times;</button>
                 </div>
                 <div className="p-4 space-y-4">
@@ -140,7 +161,7 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
                             onClick={handleSavePage}
                             className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md cursor-pointer"
                         >
-                            Save Page
+                            {editData ? 'Save Changes' : 'Save Page'}
                         </button>
                     </div>
                 </div>
