@@ -85,7 +85,7 @@ function NewGroupModal({ show, onClose, onSave }) {
     }
     const payload = { groupName, users };
     try {
-      const response = await fetch("http://192.168.15.147:5000/api/SaveUserGroup", {
+      const response = await fetch("http://161.97.104.136:5000/api/SaveUserGroup", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

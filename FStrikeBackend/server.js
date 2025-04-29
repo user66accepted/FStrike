@@ -7,7 +7,6 @@ const path = require('path');
 const config = require('./config');
 const http = require('http');
 const socketIo = require('socket.io');
-const ngrokService = require('./services/ngrokService');
 const landingPageService = require('./services/landingPageService');
 
 // Import routes
@@ -27,7 +26,8 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: '*',
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    credentials: true
   }
 });
 
@@ -36,7 +36,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Apply security, CORS, logging, and JSON parsing middleware
 app.use(helmet());
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '300mb' }));
 app.use(express.urlencoded({ extended: true })); // For parsing form data
@@ -148,44 +152,16 @@ app.use((err, req, res, next) => {
   res.status(500).json({ message: 'Internal Server Error' });
 });
 
-// Initialize ngrok if enabled
-const initNgrok = async () => {
-  if (config.useNgrok) {
-    try {
-      console.log('Initializing ngrok...');
-      const url = await ngrokService.startTunnel();
-      if (url) {
-        console.log(`✅ Ngrok tunnel established at: ${url}`);
-        console.log(`✅ Tracking URL using ngrok: ${url}/tracker/:id.png`);
-      } else {
-        console.log('⚠️ Ngrok setup failed, using fallback tracking URL:', config.trackingUrl);
-      }
-    } catch (error) {
-      console.error('⚠️ Failed to start ngrok tunnel:', error);
-      console.log('⚠️ Using fallback tracking URL:', config.trackingUrl);
-    }
-  } else {
-    console.log('ℹ️ Ngrok is disabled. Using configured tracking URL:', config.trackingUrl);
-  }
-};
-
 // Start the server
 const PORT = config.port;
-server.listen(PORT, '0.0.0.0', async () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`Server listening on http://0.0.0.0:${PORT}`);
-  
-  // Initialize ngrok after server starts
-  await initNgrok();
+  console.log(`Tracking URL: ${config.trackingUrl}/tracker/:id.png`);
 });
 
 // Handle server shutdown
 process.on('SIGINT', async () => {
   console.log('Shutting down server...');
-  
-  // Close ngrok tunnel if it's open
-  if (config.useNgrok) {
-    await ngrokService.closeTunnel();
-  }
   
   process.exit(0);
 });

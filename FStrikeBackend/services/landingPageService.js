@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const db = require('../database');
-const ngrokService = require('./ngrokService');
+const config = require('../config');
 const { v4: uuidv4 } = require('uuid');
 const cheerio = require('cheerio');
 
@@ -60,8 +60,7 @@ const createLandingPageRouter = (landingPage, campaignId) => {
     const processedHtml = processLandingPageHtml(
       landingPage.html_content,
       campaignId,
-      landingPage.id,
-      ngrokService.getUrl()
+      landingPage.id
     );
     res.send(processedHtml);
   });
@@ -70,35 +69,7 @@ const createLandingPageRouter = (landingPage, campaignId) => {
   router.post('*', (req, res) => {
     const formData = req.body;
     console.log(`Captured form data for campaign ${campaignId}:`, formData);
-
-    // Ensure tables exist, then store
-    const createSubs = `
-      CREATE TABLE IF NOT EXISTS FormSubmissions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        campaign_id INTEGER NOT NULL,
-        landing_page_id INTEGER NOT NULL,
-        form_data TEXT NOT NULL,
-        ip_address TEXT,
-        user_agent TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      )`;
-    const createFields = `
-      CREATE TABLE IF NOT EXISTS FormFields (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        submission_id INTEGER NOT NULL,
-        field_name TEXT NOT NULL,
-        field_value TEXT,
-        field_type TEXT DEFAULT NULL,
-        FOREIGN KEY (submission_id) REFERENCES FormSubmissions(id) ON DELETE CASCADE
-      )`;
-
-    db.run(createSubs, () => {
-      db.run(createFields, () => {
-        storeFormSubmission(campaignId, landingPage.id, formData, req);
-      });
-    });
-
-    // Reload the landing page
+    storeFormSubmission(campaignId, landingPage.id, formData, req);
     res.redirect(req.originalUrl);
   });
 
@@ -267,7 +238,6 @@ const hostLandingPage = (landingPageId, campaignId) => {
       try {
         // Generate a unique path for this landing page instance
         const pageId = uuidv4();
-        // IMPORTANT: Use direct UUID as the path (no prefix)
         const pagePath = `/${pageId}`;
 
         console.log(`Created page path: ${pagePath} for landing page ID: ${landingPageId}`);
@@ -278,14 +248,9 @@ const hostLandingPage = (landingPageId, campaignId) => {
         // Store the router with its unique path
         activeLandingPages.set(pagePath, router);
 
-        // Get or start ngrok tunnel
-        const ngrokUrl = await ngrokService.getUrl();
-        if (!ngrokUrl) {
-          return reject(new Error('Failed to create ngrok tunnel'));
-        }
-
-        // Return the full URL to the hosted landing page
-        const fullUrl = `${ngrokUrl}${pagePath}`;
+        // Use the VPS URL directly instead of ngrok
+        const baseUrl = config.trackingUrl;
+        const fullUrl = `${baseUrl}${pagePath}`;
         console.log(`Generated landing page URL: ${fullUrl}`);
 
         // Store the URL in the campaign record
@@ -563,13 +528,15 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
  * @param {string} html - Original HTML content
  * @param {number} campaignId - Campaign ID
  * @param {number} landingPageId - Landing page ID
- * @param {string} ngrokUrl - The ngrok URL to use for tracking
  * @returns {string} - Processed HTML content
  */
-const processLandingPageHtml = (html, campaignId, landingPageId, ngrokUrl) => {
+const processLandingPageHtml = (html, campaignId, landingPageId) => {
   try {
     // Use cheerio to parse the HTML
     const $ = cheerio.load(html);
+
+    // Use VPS URL directly from config
+    const baseUrl = config.trackingUrl;
 
     // AUTO-INJECT NAME ATTRIBUTES so every field is submitted
     $('input, select, textarea').each((i, el) => {
@@ -587,7 +554,7 @@ const processLandingPageHtml = (html, campaignId, landingPageId, ngrokUrl) => {
     $('a').each(function () {
       const href = $(this).attr('href');
       if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-        const trackingUrl = `${ngrokUrl}/track-click/${campaignId}/${landingPageId}?url=${encodeURIComponent(href)}`;
+        const trackingUrl = `${baseUrl}/track-click/${campaignId}/${landingPageId}?url=${encodeURIComponent(href)}`;
         $(this).attr('href', trackingUrl);
       }
     });
@@ -609,7 +576,7 @@ const processLandingPageHtml = (html, campaignId, landingPageId, ngrokUrl) => {
     });
 
     // Add hidden tracking pixel
-    $('body').append(`<img src="${ngrokUrl}/track-open/${campaignId}/${landingPageId}" style="display:none;" />`);
+    $('body').append(`<img src="${baseUrl}/tracker/open/${campaignId}/${landingPageId}" style="display:none;" />`);
 
     // Return the modified HTML
     return $.html();

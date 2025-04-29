@@ -2,7 +2,6 @@ const db = require('../database');
 const path = require('path');
 const { createCanvas } = require('canvas');
 const config = require('../config');
-const ngrokService = require('./ngrokService');
 
 // Function to generate a 1x1 transparent pixel
 const generateWebBug = () => {
@@ -21,20 +20,6 @@ const TRANSPARENT_PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1H
 
 // Function to generate a tracking URL for a particular email/campaign
 const generateTrackingUrl = async (pixelId) => {
-  // If ngrok is enabled, use the ngrok URL
-  if (config.useNgrok) {
-    try {
-      const ngrokUrl = await ngrokService.getUrl();
-      // ngrokService.getUrl() now returns the fallback URL if ngrok fails
-      return `${ngrokUrl}/tracker/${pixelId}.png`;
-    } catch (error) {
-      console.error('Error getting tracking URL:', error);
-      // Fall back to the configured URL if there's still an error
-      return `${config.trackingUrl}/tracker/${pixelId}.png`;
-    }
-  }
-  
-  // Use the configured tracking URL if ngrok is disabled
   return `${config.trackingUrl}/tracker/${pixelId}.png`;
 };
 
@@ -168,4 +153,4 @@ module.exports = {
   logOpen,
   getCampaignOpens,
   generateTrackingUrl
-}; 
+};

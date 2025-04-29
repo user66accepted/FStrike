@@ -194,7 +194,7 @@ const launchCampaign = async (req, res) => {
       return res.status(400).json({ error: `Campaign is already ${campaign.status.toLowerCase()}` });
     }
 
-    // 2. Generate ngrok landing page URL for this campaign
+    // 2. Generate landing page URL for this campaign
     let landingPageUrl;
     try {
       landingPageUrl = await landingPageService.hostLandingPage(campaign.landing_page_id, id);

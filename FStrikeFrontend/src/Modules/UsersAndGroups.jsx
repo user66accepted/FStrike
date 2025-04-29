@@ -15,7 +15,7 @@ const UsersAndGroups = () => {
   const fetchGroups = async () => {
     setLoading(true);
     try {
-      const response = await fetch("http://192.168.15.147:5000/api/GetUserGroups");
+      const response = await fetch("http://161.97.104.136:5000/api/GetUserGroups");
       if (!response.ok) {
         throw new Error("Failed to fetch groups");
       }

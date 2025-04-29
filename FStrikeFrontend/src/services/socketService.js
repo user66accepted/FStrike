@@ -9,7 +9,8 @@ console.log('Socket.io connecting to:', baseUrl);
 const socket = io(baseUrl, {
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
-  timeout: 20000
+  timeout: 20000,
+  withCredentials: true
 });
 
 // Event listeners
@@ -101,4 +102,4 @@ export default {
   addEventListener,
   removeEventListener,
   reconnect
-}; 
+};
