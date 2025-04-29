@@ -185,6 +185,32 @@ db.serialize(() => {
       FOREIGN KEY (pixel_id) REFERENCES tracking_pixels(id)
     )
   `);
+
+  // Form submissions table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS FormSubmissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      landing_page_id INTEGER NOT NULL,
+      form_data TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  // Form fields table for individual field storage
+  db.run(`
+    CREATE TABLE IF NOT EXISTS FormFields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      submission_id INTEGER NOT NULL,
+      field_name TEXT NOT NULL,
+      field_value TEXT,
+      field_type TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (submission_id) REFERENCES FormSubmissions(id) ON DELETE CASCADE
+    )
+  `);
   
   // Log table creation success
   console.log('Tracking tables initialized');

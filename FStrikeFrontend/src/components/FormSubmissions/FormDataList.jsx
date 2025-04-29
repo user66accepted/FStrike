@@ -16,35 +16,30 @@ const FormDataList = ({ campaignId }) => {
       try {
         setLoading(true);
         const response = await httpClient.get(
-          `/GetFormSubmissions/${campaignId}?page=1&pageSize=1000`
+          `/GetFormSubmissions/${campaignId}?page=${currentPage}&pageSize=${ENTRIES_PER_PAGE}`
         );
-        setFormData(response.data.formData);
-        setError(null);
-        setCurrentPage(1); // reset page on new campaign
+        if (response.data.formData) {
+          setFormData(response.data.formData);
+          setError(null);
+        } else {
+          setError('No form data received from server');
+        }
       } catch (err) {
         console.error('Error fetching form data:', err);
-        setError('Failed to load form submissions');
+        setError(err.response?.data?.message || 'Failed to load form submissions');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchFormData();
-  }, [campaignId]);
+    const intervalId = setInterval(fetchFormData, 10000); // Refresh every 10 seconds
+    fetchFormData(); // Initial fetch
 
-  const totalPages = formData
-    ? Math.ceil(formData.submissions.length / ENTRIES_PER_PAGE)
-    : 0;
-
-  const paginatedSubmissions = formData
-    ? formData.submissions.slice(
-        (currentPage - 1) * ENTRIES_PER_PAGE,
-        currentPage * ENTRIES_PER_PAGE
-      )
-    : [];
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, [campaignId, currentPage]);
 
   const handlePageChange = (newPage) => {
-    if (newPage < 1 || newPage > totalPages) return;
+    if (!formData || newPage < 1 || newPage > formData.totalPages) return;
     setCurrentPage(newPage);
   };
 
@@ -83,10 +78,12 @@ const FormDataList = ({ campaignId }) => {
 
   return (
     <div className="bg-white rounded-lg shadow p-6 my-4">
-      <h2 className="text-xl font-bold text-gray-800 mb-4">Form Submissions</h2>
+      <h2 className="text-xl font-bold text-gray-800 mb-4">
+        Form Submissions ({formData.totalCount} total)
+      </h2>
 
       <div className="space-y-6">
-        {paginatedSubmissions.map((submission) => (
+        {formData.submissions.map((submission) => (
           <div key={submission.id} className="border rounded-lg p-4 bg-gray-50">
             <div className="flex justify-between items-start">
               <h3 className="font-semibold text-gray-700">
@@ -103,6 +100,9 @@ const FormDataList = ({ campaignId }) => {
                       Field
                     </th>
                     <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Type
+                    </th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Value
                     </th>
                   </tr>
@@ -112,6 +112,9 @@ const FormDataList = ({ campaignId }) => {
                     <tr key={idx}>
                       <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">
                         {field.field_name}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                        {field.field_type || 'text'}
                       </td>
                       <td className="px-4 py-2 whitespace-normal text-sm text-gray-500 break-all">
                         {field.field_value}
@@ -123,14 +126,15 @@ const FormDataList = ({ campaignId }) => {
             </div>
 
             <div className="mt-2 text-xs text-gray-500">
-              User Agent: {submission.user_agent.substring(0, 100)}...
+              <div>IP Address: {submission.ip_address}</div>
+              <div>User Agent: {submission.user_agent}</div>
             </div>
           </div>
         ))}
       </div>
 
       {/* Pagination */}
-      {totalPages > 1 && (
+      {formData.totalPages > 1 && (
         <div className="flex justify-between items-center mt-6">
           <button
             className={`px-4 py-2 border rounded-md ${
@@ -145,17 +149,17 @@ const FormDataList = ({ campaignId }) => {
           </button>
 
           <span className="text-sm text-gray-600">
-            Page {currentPage} of {totalPages}
+            Page {currentPage} of {formData.totalPages}
           </span>
 
           <button
             className={`px-4 py-2 border rounded-md ${
-              currentPage === totalPages
+              currentPage === formData.totalPages
                 ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                 : 'bg-white text-blue-500 hover:bg-blue-50'
             }`}
             onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages}
+            disabled={currentPage === formData.totalPages}
           >
             Next
           </button>
