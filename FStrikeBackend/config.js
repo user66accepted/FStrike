@@ -5,7 +5,7 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration
-  trackingUrl: 'http://cyber-advisory.info:5000',
+  trackingUrl: 'https://cyber-advisory.info:5000',
   
   // Ngrok configuration
   useNgrok: false, // Disable ngrok since we're using VPS

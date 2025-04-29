@@ -20,12 +20,13 @@ const TRANSPARENT_PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1H
 
 // Function to generate a tracking URL for a particular email/campaign
 const generateTrackingUrl = async (pixelId) => {
-  return `${config.trackingUrl}/tracker/${pixelId}.png`;
+  return `${config.trackingUrl}/tracker/${pixelId}.png?t=${Date.now()}`;
 };
 
 // Handle email open events
 const logOpen = async (pixelId, req, res, io) => {
   console.log(`📊 Web bug requested: ${pixelId}`);
+  console.log(`📋 Request headers:`, JSON.stringify(req.headers, null, 2));
   
   // Debug database access
   db.get(`SELECT COUNT(*) as count FROM tracking_pixels`, [], (err, result) => {
@@ -46,9 +47,11 @@ const logOpen = async (pixelId, req, res, io) => {
     async (err, row) => {
       if (err) {
         console.error('❌ Error verifying pixel:', err);
-        // Still return a pixel image to avoid errors in email clients
+        // Always return a pixel image even on error
         res.set('Content-Type', 'image/png');
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         return res.send(TRANSPARENT_PIXEL);
       }
       if (!row) {
@@ -63,16 +66,18 @@ const logOpen = async (pixelId, req, res, io) => {
             console.error('⚠️ Pixel exists but joining with Campaigns failed');
           }
         });
-        // Still return a pixel image to avoid errors in email clients
+        // Always return a pixel
         res.set('Content-Type', 'image/png');
         res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.set('Pragma', 'no-cache');
+        res.set('Expires', '0');
         return res.send(TRANSPARENT_PIXEL);
       }
 
       console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}`);
 
       // 2) Log the "open"
-      const ip = req.ip;
+      const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
       const ua = req.get('User-Agent');
       db.run(
         `INSERT INTO open_logs (pixel_id, ip, userAgent) VALUES (?, ?, ?)`,
@@ -83,6 +88,8 @@ const logOpen = async (pixelId, req, res, io) => {
             // Still return a pixel image to avoid errors in email clients
             res.set('Content-Type', 'image/png');
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+            res.set('Pragma', 'no-cache');
+            res.set('Expires', '0');
             return res.send(TRANSPARENT_PIXEL);
           }
           
@@ -115,6 +122,7 @@ const logOpen = async (pixelId, req, res, io) => {
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             res.set('Pragma', 'no-cache');
             res.set('Expires', '0');
+            res.set('Last-Modified', (new Date()).toUTCString());
             res.send(webBug);
           } catch (error) {
             console.error('❌ Error generating web bug:', error);
@@ -123,6 +131,7 @@ const logOpen = async (pixelId, req, res, io) => {
             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
             res.set('Pragma', 'no-cache');
             res.set('Expires', '0');
+            res.set('Last-Modified', (new Date()).toUTCString());
             res.send(TRANSPARENT_PIXEL);
           }
         }

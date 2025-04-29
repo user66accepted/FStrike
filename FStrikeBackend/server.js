@@ -5,7 +5,8 @@ const cors = require('cors');
 const morgan = require('morgan');
 const path = require('path');
 const config = require('./config');
-const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const socketIo = require('socket.io');
 const landingPageService = require('./services/landingPageService');
 
@@ -22,7 +23,11 @@ const aiScraperRoutes = require('./routes/aiScraperRoutes');
 const trackingService = require('./services/trackingService');
 
 const app = express();
-const server = http.createServer(app);
+const sslOptions = {
+  key: fs.readFileSync(path.join(__dirname, 'server.key')),
+  cert: fs.readFileSync(path.join(__dirname, 'server.cert')),
+};
+const server = https.createServer(sslOptions, app);
 const io = socketIo(server, {
   cors: {
     origin: "*",

@@ -285,7 +285,22 @@ const launchCampaign = async (req, res) => {
         if (campaign.add_tracking_image) {
           // Add tracking pixel at the end of the email
           const trackingUrl = await trackingService.generateTrackingUrl(trackingId);
-          const webBug = `<img src="${trackingUrl}" alt="" width="1" height="1" border="0" style="height:1px!important;width:1px!important;border-width:0!important;margin-top:0!important;margin-bottom:0!important;margin-right:0!important;margin-left:0!important;padding-top:0!important;padding-bottom:0!important;padding-right:0!important;padding-left:0!important;display:block;" />`;
+          const webBug = `
+            <!-- Mail tracking -->
+            <div style="line-height:0;font-size:0;height:0;display:none">
+              <img src="${trackingUrl}" 
+                   width="1" 
+                   height="1" 
+                   alt="" 
+                   style="width:1px!important;height:1px!important;border:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99;position:fixed"
+              />
+              <img src="${trackingUrl}" 
+                   width="0" 
+                   height="0" 
+                   alt="" 
+                   style="visibility:hidden;width:0!important;height:0!important;border:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0"
+              />
+            </div>`;
           emailHtml = `${emailHtml}${webBug}`;
         }
 
