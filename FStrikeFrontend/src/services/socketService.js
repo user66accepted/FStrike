@@ -10,7 +10,9 @@ const socket = io(baseUrl, {
   reconnectionAttempts: 5,
   reconnectionDelay: 1000,
   timeout: 20000,
-  withCredentials: true
+  withCredentials: true,
+  autoConnect: true,
+  transports: ['polling', 'websocket']
 });
 
 // Event listeners

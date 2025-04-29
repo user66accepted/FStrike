@@ -25,9 +25,10 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    credentials: true
+    origin: true, // This will reflect the request origin
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization"]
   }
 });
 
@@ -37,27 +38,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Apply security, CORS, logging, and JSON parsing middleware
 app.use(helmet());
 app.use(cors({
-  origin: '*',
+  origin: true, // This will reflect the request origin
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 app.use(morgan('combined'));
 app.use(express.json({ limit: '300mb' }));
 app.use(express.urlencoded({ extended: true })); // For parsing form data
 
-// Add detailed request logging for debugging
-app.use((req, res, next) => {
-  console.log('==================== REQUEST DETAILS ====================');
-  console.log(`REQUEST METHOD: ${req.method}`);
-  console.log(`REQUEST PATH: ${req.path}`);
-  console.log(`REQUEST URL: ${req.url}`);
-  console.log(`ORIGINAL URL: ${req.originalUrl}`);
-  console.log(`REQUEST HOSTNAME: ${req.hostname}`);
-  console.log(`QUERY PARAMS:`, req.query);
-  console.log(`HEADERS:`, req.headers);
-  console.log('==========================================================');
-  next();
-});
 
 // Ensure OPTIONS requests return valid JSON to prevent empty response issues
 app.options('*', (req, res) => {
