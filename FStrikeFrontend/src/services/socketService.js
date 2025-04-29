@@ -12,10 +12,7 @@ const socket = io(baseUrl, {
   timeout: 20000,
   withCredentials: true,
   autoConnect: true,
-  transports: ['polling', 'websocket'],
-  extraHeaders: {
-    'Origin': 'http://161.97.104.136:5173'
-  }
+  transports: ['polling', 'websocket']
 });
 
 // Event listeners
