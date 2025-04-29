@@ -13,7 +13,7 @@ const LandingPages = () => {
   // Function to refresh the list of landing pages
   const refreshLandingPages = async () => {
     try {
-      const response = await fetch("http://192.168.15.147:5000/api/GetLandingPages");
+      const response = await fetch("http://161.97.104.136:5000/api/GetLandingPages");
       const data = await response.json();
       setLandingPages(data);
     } catch (error) {

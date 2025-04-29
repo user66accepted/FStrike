@@ -65,7 +65,7 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
   // Inject tracking image if enabled
   const getHtmlContentWithTracking = () => {
     if (addTrackingImage) {
-      return `${htmlContent} <img src='http://localhost:5000/track?email=user@example.com' width='1' height='1' style='display:none;' />`;
+      return `${htmlContent} <img src='http://161.97.104.136:5000/track?email=user@example.com' width='1' height='1' style='display:none;' />`;
     }
     return htmlContent;
   };
@@ -120,7 +120,7 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
     });
 
     try {
-      const response = await fetch("http://192.168.15.147:5000/api/SaveTemplate", {
+      const response = await fetch("http://161.97.104.136:5000/api/SaveTemplate", {
         method: "POST",
         body: formData,
       });

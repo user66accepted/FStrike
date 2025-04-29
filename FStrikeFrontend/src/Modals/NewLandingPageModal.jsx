@@ -50,7 +50,7 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave }) => {
         };
 
         try {
-            const response = await fetch("http://192.168.15.147:5000/api/SavePage", {
+            const response = await fetch("http://161.97.104.136:5000/api/SavePage", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

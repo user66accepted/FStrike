@@ -16,7 +16,7 @@ const EmailTemplates = () => {
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://192.168.15.147:5000/api/GetEmailTemplates");
+      const res = await fetch("http://161.97.104.136:5000/api/GetEmailTemplates");
       if (!res.ok) {
         throw new Error("Failed to fetch templates");
       }

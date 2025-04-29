@@ -9,7 +9,7 @@ const ImportEmailModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleImport = async () => {
     try {
-      const response = await fetch("http://192.168.15.147:5000/api/import_email", {
+      const response = await fetch("http://161.97.104.136:5000/api/import_email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

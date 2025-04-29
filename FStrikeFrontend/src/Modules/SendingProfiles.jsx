@@ -14,7 +14,7 @@ export default function SendingProfiles() {
   const fetchProfiles = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://192.168.15.147:5000/api/GetProfiles");
+      const res = await fetch("http://161.97.104.136:5000/api/GetProfiles");
       if (!res.ok) throw new Error("Could not load profiles");
       const { profiles } = await res.json();
       setProfiles(profiles);
