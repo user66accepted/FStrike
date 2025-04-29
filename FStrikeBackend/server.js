@@ -25,7 +25,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: true, // This will reflect the request origin
+    origin: "http://192.168.15.147:5173",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"]
@@ -38,7 +38,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Apply security, CORS, logging, and JSON parsing middleware
 app.use(helmet());
 app.use(cors({
-  origin: true, // This will reflect the request origin
+  origin: "http://192.168.15.147:5173",
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ["Content-Type", "Authorization"]
