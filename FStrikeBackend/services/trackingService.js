@@ -51,16 +51,16 @@ const logOpen = async (pixelId, req, res, io) => {
 
       console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}`);
 
-      // Check if this is a unique open (same email + IP hasn't opened before)
+      // Check if this email has already opened this campaign (without considering IP)
       db.get(
         `SELECT COUNT(*) as count
          FROM open_logs ol
          JOIN tracking_pixels tp ON ol.pixel_id = tp.id
-         WHERE tp.user_email = ? AND ol.ip = ? AND tp.campaign_id = ?`,
-        [row.user_email, ip, row.campaign_id],
+         WHERE tp.user_email = ? AND tp.campaign_id = ?`,
+        [row.user_email, row.campaign_id],
         (countErr, countRow) => {
           if (!countErr && countRow.count === 0) {
-            // This is a unique open, log it
+            // This is a unique open for this email, log it
             db.run(
               `INSERT INTO open_logs (pixel_id, ip, userAgent) VALUES (?, ?, ?)`,
               [pixelId, ip, ua],
