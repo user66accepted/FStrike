@@ -25,21 +25,19 @@ const CampaignStatistics = ({ stats }) => {
 
   // Data for email metrics bar chart
   const barChartData = {
-    labels: ['Emails Sent', 'Emails Opened', 'Unique Opens', 'Links Clicked', 'Unique Clicks'],
+    labels: ['Emails Sent', 'Emails Opened', 'Links Clicked', 'Unique Clicks'],
     datasets: [
       {
         label: 'Count',
         data: [
           stats.totalSent,
           stats.totalOpened,
-          stats.uniqueOpens,
           stats.totalClicks,
           stats.uniqueClicks
         ],
         backgroundColor: [
           colors.blue,
           colors.green,
-          colors.lightBlue,
           colors.amber,
           colors.purple
         ],
@@ -94,7 +92,6 @@ const CampaignStatistics = ({ stats }) => {
   const getColorForMetric = (metricName) => {
     const metricColors = {
       'Emails Opened': colors.green,
-      'Unique Opens': colors.lightBlue,
       'Links Clicked': colors.amber,
       'Unique Clicks': colors.purple,
     };
@@ -196,19 +193,7 @@ const CampaignStatistics = ({ stats }) => {
                 />
               </div>
             </div>
-            
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-gray-500">Unique Opens</p>
-                <p className="text-2xl font-bold">{calculatePercentage(stats.uniqueOpens, stats.totalSent)}</p>
-              </div>
-              <div className="w-16 h-16">
-                <Doughnut 
-                  data={createDoughnutData(stats.uniqueOpens, stats.totalSent, 'Unique Opens')} 
-                  options={doughnutOptions} 
-                />
-              </div>
-            </div>
+          
             
             <div className="flex justify-between items-center">
               <div>
