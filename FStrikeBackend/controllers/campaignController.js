@@ -478,18 +478,27 @@ const getFormSubmissions = async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const pageSize = parseInt(req.query.pageSize) || 3;
   
+  console.log(`Getting form submissions for campaign ${id}, page ${page}, pageSize ${pageSize}`);
+  
   try {
     // Verify campaign exists
     const campaign = await new Promise((resolve, reject) => {
       db.get('SELECT id, name FROM Campaigns WHERE id = ?', [id], (err, row) => {
         if (err) reject(err);
         if (!row) reject(new Error('Campaign not found'));
+        console.log('Found campaign:', row);
         resolve(row);
       });
     });
 
     // Get form submissions for this campaign with pagination
     const formData = await landingPageService.getCampaignFormSubmissions(id, page, pageSize);
+    console.log('Form submissions retrieved:', {
+      totalCount: formData.totalCount,
+      currentPage: formData.currentPage,
+      totalPages: formData.totalPages,
+      submissionCount: formData.submissions.length
+    });
     
     return res.json({
       campaign: campaign,

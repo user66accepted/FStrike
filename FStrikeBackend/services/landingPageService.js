@@ -484,13 +484,16 @@ const getCampaignClicks = (campaignId) => {
  */
 const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
   return new Promise((resolve, reject) => {
+    console.log('Checking FormSubmissions table existence...');
     // Check if the table exists first
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='FormSubmissions'", [], (err, tableExists) => {
       if (err) {
+        console.error('Error checking FormSubmissions table:', err);
         return reject(err);
       }
 
       if (!tableExists) {
+        console.log('FormSubmissions table does not exist yet');
         // Return empty array if table doesn't exist yet
         return resolve({
           submissions: [],
@@ -500,6 +503,7 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
         });
       }
 
+      console.log('FormSubmissions table exists, calculating pagination...');
       // Calculate offset
       const offset = (page - 1) * pageSize;
 
@@ -511,11 +515,13 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
         [campaignId],
         (countErr, countRow) => {
           if (countErr) {
+            console.error('Error getting submission count:', countErr);
             return reject(countErr);
           }
 
           const totalCount = countRow.count;
           const totalPages = Math.ceil(totalCount / pageSize);
+          console.log(`Found ${totalCount} total submissions, ${totalPages} total pages`);
 
           // Get paginated submissions
           db.all(
@@ -527,14 +533,18 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
             [campaignId, pageSize, offset],
             (submissionsErr, submissions) => {
               if (submissionsErr) {
+                console.error('Error fetching submissions:', submissionsErr);
                 return reject(submissionsErr);
               }
+
+              console.log(`Retrieved ${submissions.length} submissions for current page`);
 
               // For each submission, get its fields
               const submissionsWithFields = [];
               let processed = 0;
 
               if (submissions.length === 0) {
+                console.log('No submissions found for current page');
                 return resolve({
                   submissions: [],
                   totalCount,
@@ -543,18 +553,21 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
                 });
               }
 
+              // Process each submission to get its fields
               submissions.forEach(submission => {
                 db.all(
-                  `SELECT field_name, field_value
+                  `SELECT field_name, field_value, field_type
                    FROM FormFields
                    WHERE submission_id = ?
                    ORDER BY id ASC`,
                   [submission.id],
                   (fieldsErr, fields) => {
                     if (fieldsErr) {
-                      console.error('Error fetching fields:', fieldsErr);
+                      console.error('Error fetching fields for submission ${submission.id}:', fieldsErr);
                       fields = [];
                     }
+
+                    console.log(`Retrieved ${fields.length} fields for submission ${submission.id}`);
 
                     // Add fields to submission
                     submissionsWithFields.push({
@@ -570,6 +583,7 @@ const getCampaignFormSubmissions = (campaignId, page = 1, pageSize = 100) => {
                       // Sort submissions by created_at in descending order
                       submissionsWithFields.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
+                      console.log('Completed processing all submissions');
                       resolve({
                         submissions: submissionsWithFields,
                         totalCount,

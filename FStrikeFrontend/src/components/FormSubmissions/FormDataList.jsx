@@ -14,14 +14,24 @@ const FormDataList = ({ campaignId }) => {
 
     const fetchFormData = async () => {
       try {
+        console.log(`Fetching form data for campaign ${campaignId}, page ${currentPage}`);
         setLoading(true);
         const response = await httpClient.get(
           `/GetFormSubmissions/${campaignId}?page=${currentPage}&pageSize=${ENTRIES_PER_PAGE}`
         );
+        console.log('API Response:', response.data);
+        
         if (response.data.formData) {
+          console.log('Setting form data:', {
+            totalCount: response.data.formData.totalCount,
+            currentPage: response.data.formData.currentPage,
+            totalPages: response.data.formData.totalPages,
+            submissionCount: response.data.formData.submissions.length
+          });
           setFormData(response.data.formData);
           setError(null);
         } else {
+          console.error('No form data in response');
           setError('No form data received from server');
         }
       } catch (err) {
