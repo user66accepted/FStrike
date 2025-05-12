@@ -120,7 +120,7 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
     });
 
     try {
-      const response = await fetch("http://161.97.104.136:5000/api/SaveTemplate", {
+      const response = await fetch("http://147.93.87.182:5000/api/SaveTemplate", {
         method: "POST",
         body: formData,
       });

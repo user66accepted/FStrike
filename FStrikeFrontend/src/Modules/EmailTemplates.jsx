@@ -16,7 +16,7 @@ const EmailTemplates = () => {
   const fetchTemplates = async () => {
     setLoading(true);
     try {
-      const res = await fetch("http://161.97.104.136:5000/api/GetEmailTemplates");
+      const res = await fetch("http://147.93.87.182:5000/api/GetEmailTemplates");
       if (!res.ok) {
         throw new Error("Failed to fetch templates");
       }
@@ -47,7 +47,7 @@ const EmailTemplates = () => {
   const handleDelete = async () => {
     if (!selectedTemplate) return;
     try {
-      const res = await fetch(`http://161.97.104.136:5000/api/DeleteEmailTemplate/${selectedTemplate.id}`, {
+      const res = await fetch(`http://147.93.87.182:5000/api/DeleteEmailTemplate/${selectedTemplate.id}`, {
         method: "DELETE",
       });
       if (!res.ok) {

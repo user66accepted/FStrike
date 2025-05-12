@@ -98,7 +98,7 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
     }
 
     try {
-      const response = await fetch("http://161.97.104.136:5000/api/SaveUserGroup", {
+      const response = await fetch("http://147.93.87.182:5000/api/SaveUserGroup", {
         method: editData?.id ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",

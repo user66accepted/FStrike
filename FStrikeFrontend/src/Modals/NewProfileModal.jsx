@@ -80,8 +80,8 @@ export default function NewProfileModal({ profile, onClose }) {
 
     try {
       const url = profile
-        ? `http://161.97.104.136:5000/api/UpdateProfile/${profile.profileId}`
-        : "http://161.97.104.136:5000/api/SaveProfile";
+        ? `http://147.93.87.182:5000/api/UpdateProfile/${profile.profileId}`
+        : "http://147.93.87.182:5000/api/SaveProfile";
 
       const method = profile ? "PUT" : "POST";
 

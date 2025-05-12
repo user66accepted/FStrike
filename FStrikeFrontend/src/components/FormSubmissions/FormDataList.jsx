@@ -42,10 +42,10 @@ const FormDataList = ({ campaignId }) => {
       }
     };
 
-    const intervalId = setInterval(fetchFormData, 10000); // Refresh every 10 seconds
-    fetchFormData(); // Initial fetch
+    const intervalId = setInterval(fetchFormData, 10000); 
+    fetchFormData(); 
 
-    return () => clearInterval(intervalId); // Cleanup on unmount
+    return () => clearInterval(intervalId); 
   }, [campaignId, currentPage]);
 
   const handlePageChange = (newPage) => {

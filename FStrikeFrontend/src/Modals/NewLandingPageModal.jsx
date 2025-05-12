@@ -67,8 +67,8 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave, editData }) => {
 
         try {
             const url = editData 
-                ? `http://161.97.104.136:5000/api/UpdatePage/${editData.id}`
-                : "http://161.97.104.136:5000/api/SavePage";
+                ? `http://147.93.87.182:5000/api/UpdatePage/${editData.id}`
+                : "http://147.93.87.182:5000/api/SavePage";
                 
             const response = await fetch(url, {
                 method: editData ? "PUT" : "POST",

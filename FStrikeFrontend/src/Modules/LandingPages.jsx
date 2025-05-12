@@ -14,7 +14,7 @@ const LandingPages = () => {
   // Function to refresh the list of landing pages
   const refreshLandingPages = async () => {
     try {
-      const response = await fetch("http://161.97.104.136:5000/api/GetLandingPages");
+      const response = await fetch("http://147.93.87.182:5000/api/GetLandingPages");
       const data = await response.json();
       setLandingPages(data);
     } catch (error) {
@@ -42,7 +42,7 @@ const LandingPages = () => {
     if (!selectedPage) return;
     try {
       const response = await fetch(
-        `http://161.97.104.136:5000/api/DeleteLandingPage/${selectedPage.id}`,
+        `http://147.93.87.182:5000/api/DeleteLandingPage/${selectedPage.id}`,
         {
           method: "DELETE",
         }
@@ -64,7 +64,7 @@ const LandingPages = () => {
   // Handle edit button click
   const handleEditClick = async (page) => {
     try {
-      const response = await fetch(`http://161.97.104.136:5000/api/GetLandingPage/${page.id}`);
+      const response = await fetch(`http://147.93.87.182:5000/api/GetLandingPage/${page.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch page details');
       }
