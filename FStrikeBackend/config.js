@@ -5,7 +5,7 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration - force HTTP
-  trackingUrl: 'http://147.93.87.182:5000',
+  trackingUrl: 'https://railtel.ddns.net',
   
   // Ngrok configuration
   useNgrok: false, // Disable ngrok since we're using VPS
