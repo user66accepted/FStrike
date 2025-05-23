@@ -81,18 +81,18 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
         <!-- Email tracking -->
         <div style="line-height:0;font-size:0;height:0">
           <!-- Primary tracker -->
-          <img src="https://railtel.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
+          <img src="https://ananthtech.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
                width="1" 
                height="1" 
                border="0"
                style="height:1px!important;width:1px!important;border-width:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99"
                alt="" />
           <!-- Secondary tracker (GIF format) -->
-          <img src="https://railtel.ddns.net/track/${trackingId}/pixel.gif?t=${Date.now()}"
+          <img src="https://ananthtech.ddns.net/track/${trackingId}/pixel.gif?t=${Date.now()}"
                style="display:none;width:1px;height:1px;"
                alt="" />
           <!-- Tertiary tracker -->
-          <img src="https://railtel.ddns.net/t/${trackingId}/p.png?t=${Date.now()}"
+          <img src="https://ananthtech.ddns.net/t/${trackingId}/p.png?t=${Date.now()}"
                style="visibility:hidden;width:1px;height:1px;"
                alt="" />
         </div>`;

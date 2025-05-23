@@ -297,7 +297,7 @@ const launchCampaign = async (req, res) => {
           const webBug = `
             <!-- Mail tracking -->
             <div style="line-height:0;font-size:0;height:0">
-              <img src="https://railtel.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
+              <img src="https://ananthtech.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
                    width="1" 
                    height="1" 
                    border="0"
@@ -333,13 +333,13 @@ const launchCampaign = async (req, res) => {
         await transporter.sendMail(mailOptions);
 
         // Log detailed information about the email
-        console.log('========== EMAIL SENT DETAILS ==========');
-        console.log(`Recipient: ${user.email}`);
-        console.log(`Campaign: ${campaign.name} (ID: ${id})`);
-        console.log(`Tracking Pixel ID: ${trackingId}`);
-        console.log(`Tracking Pixel URL: ${await trackingService.generateTrackingUrl(trackingId)}`);
-        console.log(`Landing Page URL: ${landingPageUrl}`);
-        console.log('========================================');
+        // console.log('========== EMAIL SENT DETAILS ==========');
+        // console.log(`Recipient: ${user.email}`);
+        // console.log(`Campaign: ${campaign.name} (ID: ${id})`);
+        // console.log(`Tracking Pixel ID: ${trackingId}`);
+        // console.log(`Tracking Pixel URL: ${await trackingService.generateTrackingUrl(trackingId)}`);
+        // console.log(`Landing Page URL: ${landingPageUrl}`);
+        // console.log('========================================');
 
         // Log email sent
         console.log(`Email sent to: ${user.email} for campaign: ${campaign.name} (ID: ${id})`);
