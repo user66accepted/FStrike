@@ -14,24 +14,32 @@ const saveCampaign = (req, res) => {
     launchDate,
     sendByDate,
     profileId,
-    groupId
+    groupId,
+    useEvilginx,
+    evilginxUrl
   } = req.body;
 
   // Validate required fields
-  if (!name || !templateId || !landingPageId || !url || !launchDate || !profileId || !groupId) {
+  if (!name || !templateId || (!landingPageId && !useEvilginx) || !url || !launchDate || !profileId || !groupId) {
     return res.status(400).json({ error: 'All required fields must be provided.' });
+  }
+
+  if (useEvilginx && !evilginxUrl) {
+    return res.status(400).json({ error: 'Evilginx URL is required when using Evilginx option.' });
   }
 
   const query = `
     INSERT INTO Campaigns (
       name, template_id, landing_page_id, url, 
-      launch_date, send_by_date, profile_id, group_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      launch_date, send_by_date, profile_id, group_id,
+      use_evilginx, evilginx_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(query, [
     name, templateId, landingPageId, url,
-    launchDate, sendByDate, profileId, groupId
+    launchDate, sendByDate, profileId, groupId,
+    useEvilginx ? 1 : 0, evilginxUrl
   ], function(err) {
     if (err) {
       console.error('Error saving campaign:', err.message);
@@ -194,14 +202,19 @@ const launchCampaign = async (req, res) => {
       return res.status(400).json({ error: `Campaign is already ${campaign.status.toLowerCase()}` });
     }
 
-    // 2. Generate landing page URL for this campaign
+    // 2. Generate landing page URL or use evilginx URL
     let landingPageUrl;
     try {
-      landingPageUrl = await landingPageService.hostLandingPage(campaign.landing_page_id, id);
-      console.log(`Generated landing page URL: ${landingPageUrl} for campaign ${id}`);
+      if (campaign.use_evilginx) {
+        landingPageUrl = campaign.evilginx_url;
+        console.log(`Using Evilginx URL: ${landingPageUrl} for campaign ${id}`);
+      } else {
+        landingPageUrl = await landingPageService.hostLandingPage(campaign.landing_page_id, id);
+        console.log(`Generated landing page URL: ${landingPageUrl} for campaign ${id}`);
+      }
     } catch (error) {
-      console.error('Error generating landing page URL:', error);
-      return res.status(500).json({ error: 'Failed to create landing page', details: error.message });
+      console.error('Error setting up landing page URL:', error);
+      return res.status(500).json({ error: 'Failed to set up landing page', details: error.message });
     }
 
     // 3. Get users from the targeted group

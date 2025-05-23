@@ -22,7 +22,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
     launchDate: 'April 8th 2025, 11:21 am',
     sendByDate: '',
     profileId: '',
-    groupId: ''
+    groupId: '',
+    useEvilginx: false,
+    evilginxUrl: ''
   });
 
   useEffect(() => {
@@ -60,7 +62,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
         launchDate: 'April 8th 2025, 11:21 am',
         sendByDate: '',
         profileId: '',
-        groupId: ''
+        groupId: '',
+        useEvilginx: false,
+        evilginxUrl: ''
       });
       setValidationError(null);
     }
@@ -75,10 +79,10 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
   };
 
   const validateForm = () => {
+    // Basic required fields
     const requiredFields = [
       { field: 'name', label: 'Campaign name' },
       { field: 'templateId', label: 'Email template' },
-      { field: 'landingPageId', label: 'Landing page' },
       { field: 'url', label: 'URL' },
       { field: 'launchDate', label: 'Launch date' },
       { field: 'profileId', label: 'Sending profile' },
@@ -90,6 +94,18 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
         setValidationError(`${label} is required`);
         return false;
       }
+    }
+
+    // Landing page validation
+    if (!formData.useEvilginx && !formData.landingPageId) {
+      setValidationError('Landing page is required');
+      return false;
+    }
+
+    // Evilginx URL validation
+    if (formData.useEvilginx && !formData.evilginxUrl) {
+      setValidationError('Evilginx URL is required when using Evilginx option');
+      return false;
     }
 
     setValidationError(null);
@@ -206,20 +222,52 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700">Landing Page:</label>
-            <select 
-              name="landingPageId"
-              value={formData.landingPageId}
-              onChange={handleInputChange}
-              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
-              disabled={loading || missingOptions.landingPages}
-            >
-              <option value="">Select Landing Page</option>
-              {landingPages.map(page => (
-                <option key={page.id} value={page.id}>
-                  {page.page_name}
-                </option>
-              ))}
-            </select>
+            <div className="space-y-2">
+              <select 
+                name="landingPageId"
+                value={formData.landingPageId}
+                onChange={handleInputChange}
+                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
+                disabled={loading || missingOptions.landingPages || formData.useEvilginx}
+              >
+                <option value="">Select Landing Page</option>
+                {landingPages.map(page => (
+                  <option key={page.id} value={page.id}>
+                    {page.page_name}
+                  </option>
+                ))}
+              </select>
+              
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="useEvilginx"
+                  checked={formData.useEvilginx}
+                  onChange={(e) => {
+                    setFormData(prev => ({
+                      ...prev,
+                      useEvilginx: e.target.checked,
+                      landingPageId: e.target.checked ? '' : prev.landingPageId
+                    }));
+                  }}
+                  className="w-4 h-4 text-blue-600"
+                />
+                <label htmlFor="useEvilginx" className="text-sm text-gray-700">
+                  Enter Evilginx URL
+                </label>
+              </div>
+
+              {formData.useEvilginx && (
+                <input
+                  type="text"
+                  name="evilginxUrl"
+                  placeholder="Enter Evilginx URL"
+                  value={formData.evilginxUrl}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                />
+              )}
+            </div>
           </div>
 
           <div>
