@@ -150,7 +150,7 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
     });
 
     try {
-      const response = await httpClient.post("/SaveTemplate", formData, {
+      const response = await httpClient.post("/api/SaveTemplate", formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },

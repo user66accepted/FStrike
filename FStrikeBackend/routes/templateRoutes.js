@@ -9,4 +9,4 @@ router.post('/SaveTemplate', upload.array('attachments'), templateController.sav
 router.get('/GetEmailTemplates', templateController.getEmailTemplates);
 router.delete('/DeleteEmailTemplate/:id', templateController.deleteEmailTemplate);
 
-module.exports = router; 
+module.exports = router;
