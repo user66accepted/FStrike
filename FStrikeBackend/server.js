@@ -8,6 +8,7 @@ const config = require('./config');
 const http = require('http');
 const socketIo = require('socket.io');
 const crypto = require('crypto');
+const db = require('./database'); // Add database import
 const landingPageService = require('./services/landingPageService');
 
 // Import routes
@@ -82,7 +83,6 @@ landingPageService.registerLandingPageRoutes(app);
 // Add a new endpoint to fetch the latest 'In Progress' campaign
 app.get('/api/latest-campaign', async (req, res) => {
   try {
-    const db = require('./database'); // Assuming database.js exports a database connection
     const query = `SELECT * FROM campaigns WHERE status = 'In Progress' ORDER BY created_at DESC LIMIT 1`;
     const result = await db.get(query);
 
