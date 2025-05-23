@@ -104,7 +104,8 @@ db.serialize(() => {
       last_name TEXT NOT NULL,
       email TEXT NOT NULL,
       position TEXT NOT NULL,
-      FOREIGN KEY (group_id) REFERENCES UserGroups(id) ON DELETE CASCADE
+      FOREIGN KEY (group_id) REFERENCES UserGroups(id) ON DELETE CASCADE,
+      UNIQUE(group_id, email)
     )
   `);
 

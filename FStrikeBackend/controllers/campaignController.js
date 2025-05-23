@@ -219,15 +219,25 @@ const launchCampaign = async (req, res) => {
 
     // 3. Get users from the targeted group
     const users = await new Promise((resolve, reject) => {
-      db.all(`SELECT first_name, last_name, email, position FROM GroupUsers WHERE group_id = ?`, [campaign.group_id], (err, rows) => {
-        if (err) reject(err);
-        resolve(rows);
-      });
+      db.all(
+        `SELECT DISTINCT first_name, last_name, email, position 
+         FROM GroupUsers 
+         WHERE group_id = ?
+         GROUP BY email`, // Ensure only one record per email
+        [campaign.group_id], 
+        (err, rows) => {
+          if (err) reject(err);
+          console.log(`Found ${rows.length} unique users in group ${campaign.group_id}`);
+          resolve(rows);
+        }
+      );
     });
 
     if (users.length === 0) {
       return res.status(400).json({ error: 'No users found in the target group' });
     }
+
+    console.log('Preparing to send emails to the following addresses:', users.map(u => u.email).join(', '));
 
     // 4. Get smtp settings from sending profile
     const profile = await new Promise((resolve, reject) => {

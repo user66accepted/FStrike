@@ -78,6 +78,13 @@ const saveUserGroup = async (req, res, next) => {
     return res.status(400).json({ message: 'Group name and at least one user are required.' });
   }
 
+  // Check for duplicate emails in the request
+  const emails = users.map(u => u.email);
+  const uniqueEmails = new Set(emails);
+  if (emails.length !== uniqueEmails.size) {
+    return res.status(400).json({ message: 'Duplicate email addresses are not allowed in the same group.' });
+  }
+
   db.serialize(() => {
     db.run("BEGIN TRANSACTION");
     
@@ -104,6 +111,7 @@ const saveUserGroup = async (req, res, next) => {
             [groupId, user.firstName, user.lastName, user.email, user.position],
             function (err) {
               if (err) {
+                console.error('Error inserting user:', user.email, err);
                 insertionError = true;
               }
             }
@@ -115,7 +123,7 @@ const saveUserGroup = async (req, res, next) => {
             db.run("ROLLBACK");
             return res.status(500).json({
               message: "Error saving group users",
-              error: err ? err.message : "One or more user inserts failed."
+              error: err ? err.message : "One or more user inserts failed. This may be due to duplicate email addresses."
             });
           }
           db.run("COMMIT");
@@ -130,6 +138,13 @@ const updateUserGroup = async (req, res, next) => {
   const { groupId, groupName, users } = req.body;
   if (!groupId || !groupName || !users || !Array.isArray(users) || users.length === 0) {
     return res.status(400).json({ message: 'Group ID, name and at least one user are required.' });
+  }
+
+  // Check for duplicate emails in the request
+  const emails = users.map(u => u.email);
+  const uniqueEmails = new Set(emails);
+  if (emails.length !== uniqueEmails.size) {
+    return res.status(400).json({ message: 'Duplicate email addresses are not allowed in the same group.' });
   }
 
   db.serialize(() => {
@@ -167,6 +182,7 @@ const updateUserGroup = async (req, res, next) => {
                 [groupId, user.firstName, user.lastName, user.email, user.position],
                 function (err) {
                   if (err) {
+                    console.error('Error inserting user:', user.email, err);
                     insertionError = true;
                   }
                 }
@@ -178,7 +194,7 @@ const updateUserGroup = async (req, res, next) => {
                 db.run("ROLLBACK");
                 return res.status(500).json({
                   message: "Error updating group users",
-                  error: err ? err.message : "One or more user inserts failed."
+                  error: err ? err.message : "One or more user inserts failed. This may be due to duplicate email addresses."
                 });
               }
               db.run("COMMIT");
