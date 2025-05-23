@@ -276,8 +276,9 @@ const launchCampaign = async (req, res) => {
             }
           );
         });
-        
+
         // Add tracking web bug if enabled
+        let finalHtmlContent = modifiedEmailHtml;
         if (campaign.add_tracking_image) {
           // Create multi-layered tracking system for better compatibility
           const webBug = `
@@ -301,7 +302,7 @@ const launchCampaign = async (req, res) => {
             </div>`;
             
           // Add the tracking pixels at both the beginning and end of the email to maximize chances of loading
-          emailHtml = `${webBug}${emailHtml}${webBug}`;
+          finalHtmlContent = `${webBug}${finalHtmlContent}${webBug}`;
         }
 
         // Additional email headers to prevent caching
@@ -320,7 +321,7 @@ const launchCampaign = async (req, res) => {
           to: user.email,
           subject: campaign.subject,
           text: personalizedText,
-          html: emailHtml,
+          html: finalHtmlContent,
           headers: customHeaders
         };
 
