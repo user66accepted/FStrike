@@ -114,9 +114,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Validate data
-    if (!formData.name) {
-      setValidationError('Campaign name is required');
+    
+    // Run complete validation
+    if (!validateForm()) {
       return;
     }
 
@@ -124,11 +124,11 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
       setSubmitting(true);
       const response = await httpClient.post('/SaveCampaign', formData);
       console.log('Campaign created:', response.data);
-      onClose();
       if (onSave) onSave();
+      onClose();
     } catch (err) {
       console.error('Error creating campaign:', err);
-      setValidationError(err.response?.data?.message || 'Failed to create campaign');
+      setValidationError(err.response?.data?.error || 'Failed to create campaign');
     } finally {
       setSubmitting(false);
     }
