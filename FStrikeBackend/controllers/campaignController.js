@@ -280,29 +280,20 @@ const launchCampaign = async (req, res) => {
         // Add tracking web bug if enabled
         let finalHtmlContent = modifiedEmailHtml;
         if (campaign.add_tracking_image) {
-          // Create multi-layered tracking system for better compatibility
+          // Create single tracking pixel for better accuracy
           const webBug = `
             <!-- Mail tracking -->
             <div style="line-height:0;font-size:0;height:0">
-              <!-- Primary tracker -->
               <img src="https://railtel.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
                    width="1" 
                    height="1" 
                    border="0"
                    style="height:1px!important;width:1px!important;border-width:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99"
                    alt="" />
-              <!-- Secondary tracker (GIF format) -->
-              <img src="https://railtel.ddns.net/track/${trackingId}/pixel.gif?t=${Date.now()}"
-                   style="display:none;width:1px;height:1px;"
-                   alt="" />
-              <!-- Tertiary tracker -->
-              <img src="https://railtel.ddns.net/t/${trackingId}/p.png?t=${Date.now()}"
-                   style="visibility:hidden;width:1px;height:1px;"
-                   alt="" />
             </div>`;
             
-          // Add the tracking pixels at both the beginning and end of the email to maximize chances of loading
-          finalHtmlContent = `${webBug}${finalHtmlContent}${webBug}`;
+          // Add the tracking pixel at the end of the email
+          finalHtmlContent = `${finalHtmlContent}${webBug}`;
         }
 
         // Additional email headers to prevent caching
@@ -462,6 +453,13 @@ const getCampaignLogs = async (req, res) => {
       return timeDiff <= 5000; // 5 seconds in milliseconds
     });
 
+    // Calculate legitimate opens
+    const legitimateOpens = openedEmails.length - spamOpens.length;
+    
+    // Calculate percentages
+    const legitimateOpenPercentage = openedEmails.length > 0 ? (legitimateOpens / openedEmails.length) * 100 : 0;
+    const spamOpenPercentage = openedEmails.length > 0 ? (spamOpens.length / openedEmails.length) * 100 : 0;
+
     return res.json({
       campaign: campaign,
       sent: sentEmails.map(email => ({
@@ -489,7 +487,10 @@ const getCampaignLogs = async (req, res) => {
         totalClicks: linkClicks.length,
         uniqueOpens: totalUniqueOpens,
         uniqueClicks: totalUniqueClicks,
-        spamOpens: spamOpens.length
+        spamOpens: spamOpens.length,
+        legitimateOpens: legitimateOpens,
+        legitimateOpenPercentage: Math.round(legitimateOpenPercentage),
+        spamOpenPercentage: Math.round(spamOpenPercentage)
       }
     });
   } catch (err) {

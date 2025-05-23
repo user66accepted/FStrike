@@ -59,9 +59,10 @@ const logOpen = async (pixelId, req, res, io) => {
   // Apply headers
   Object.entries(headers).forEach(([key, value]) => res.set(key, value));
 
-  // 1) Verify pixel exists and get user email with better error handling
+  // 1) Verify pixel exists and get user email
   db.get(
-    `SELECT tp.id, tp.user_email, tp.campaign_id, c.name as campaign_name 
+    `SELECT tp.id, tp.user_email, tp.campaign_id, c.name as campaign_name,
+            (SELECT MAX(timestamp) FROM open_logs WHERE pixel_id = tp.id) as last_open
      FROM tracking_pixels tp
      JOIN Campaigns c ON tp.campaign_id = c.id
      WHERE tp.id = ?`,
@@ -72,9 +73,20 @@ const logOpen = async (pixelId, req, res, io) => {
         return res.send(TRANSPARENT_PIXEL);
       }
 
+      // Check if this is a duplicate open within 5 minutes
+      const now = new Date();
+      if (row.last_open) {
+        const lastOpenTime = new Date(row.last_open);
+        const timeDiff = now - lastOpenTime;
+        if (timeDiff < 300000) { // 5 minutes in milliseconds
+          console.log(`⚠️ Duplicate open detected within 5 minutes for pixel: ${pixelId}`);
+          return res.send(TRANSPARENT_PIXEL);
+        }
+      }
+
       console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}, client: ${mailClient}`);
 
-      // Log every open attempt with client info
+      // Log open attempt with client info
       db.run(
         `INSERT INTO open_logs (pixel_id, ip, userAgent, email_client) VALUES (?, ?, ?, ?)`,
         [pixelId, ip, ua, mailClient],
@@ -89,7 +101,7 @@ const logOpen = async (pixelId, req, res, io) => {
                 campaignId: row.campaign_id,
                 campaignName: row.campaign_name,
                 userEmail: row.user_email,
-                timestamp: new Date().toISOString(),
+                timestamp: now.toISOString(),
                 ip: ip,
                 userAgent: ua,
                 emailClient: mailClient

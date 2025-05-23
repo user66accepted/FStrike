@@ -169,11 +169,11 @@ const CampaignStatistics = ({ stats }) => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <p className="text-sm text-gray-500">Legitimate Opens</p>
-                  <p className="text-2xl font-bold text-green-600">{calculatePercentage(legitimateOpens, stats.totalOpened)}</p>
+                  <p className="text-2xl font-bold text-green-600">{stats.legitimateOpenPercentage}%</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Spam Opens</p>
-                  <p className="text-2xl font-bold text-red-600">{calculatePercentage(stats.spamOpens, stats.totalOpened)}</p>
+                  <p className="text-2xl font-bold text-red-600">{stats.spamOpenPercentage}%</p>
                 </div>
               </div>
             </div>
