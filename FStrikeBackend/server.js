@@ -7,6 +7,7 @@ const path = require('path');
 const config = require('./config');
 const http = require('http');
 const socketIo = require('socket.io');
+const crypto = require('crypto');
 const landingPageService = require('./services/landingPageService');
 
 // Import routes
@@ -96,16 +97,38 @@ app.get('/api/latest-campaign', async (req, res) => {
   }
 });
 
-// Tracking pixel endpoint with more debugging
+// Direct tracking endpoint
+app.get('/track', (req, res) => {
+  console.log('🔍 Direct tracking pixel requested:', req.query.email);
+  // Extract campaign and user info from URL parameters if available
+  const pixelId = crypto.randomUUID();
+  trackingService.logOpen(pixelId, req, res, io);
+});
+
+// Multiple tracking pixel endpoints for better compatibility
 app.get('/tracker/:id.png', (req, res) => {
-  console.log('🔍 Tracking pixel requested:', req.params.id);
-  console.log('👤 User-Agent:', req.get('User-Agent'));
-  console.log('🌐 IP Address:', req.ip);
-  
-  // Check headers
-  console.log('📋 Request headers:', JSON.stringify(req.headers, null, 2));
-  
+  console.log('🔍 PNG Tracking pixel requested:', req.params.id);
   trackingService.logOpen(req.params.id, req, res, io);
+});
+
+app.get('/track/:id/pixel.gif', (req, res) => {
+  console.log('🔍 GIF Tracking pixel requested:', req.params.id);
+  trackingService.logOpen(req.params.id, req, res, io);
+});
+
+app.get('/t/:id/p.png', (req, res) => {
+  console.log('🔍 Alternative tracking pixel requested:', req.params.id);
+  trackingService.logOpen(req.params.id, req, res, io);
+});
+
+// Update schema to include email_client column if not exists
+db.run(`
+  ALTER TABLE open_logs 
+  ADD COLUMN email_client TEXT DEFAULT 'Unknown'
+`, (err) => {
+  if (err && !err.message.includes('duplicate column')) {
+    console.error('Error adding email_client column:', err);
+  }
 });
 
 // Test tracking pixel endpoint - for testing only

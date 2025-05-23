@@ -12,6 +12,10 @@ const generateWebBug = () => {
   // Make it transparent
   ctx.clearRect(0, 0, 1, 1);
   
+  // Add a single white pixel to ensure the image is valid
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.01)';
+  ctx.fillRect(0, 0, 1, 1);
+  
   return canvas.toBuffer('image/png');
 };
 
@@ -20,18 +24,42 @@ const TRANSPARENT_PIXEL = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1H
 
 // Function to generate a tracking URL for a particular email/campaign
 const generateTrackingUrl = async (pixelId) => {
-  return `${config.trackingUrl}/tracker/${pixelId}.png?t=${Date.now()}`;
+  // Add cache-busting parameter and multiple formats for better compatibility
+  const urls = [
+    `${config.trackingUrl}/tracker/${pixelId}.png?t=${Date.now()}`,
+    `${config.trackingUrl}/track/${pixelId}/pixel.gif?t=${Date.now()}`,
+    `${config.trackingUrl}/t/${pixelId}/p.png?t=${Date.now()}`
+  ];
+  return urls;
 };
 
 // Handle email open events
 const logOpen = async (pixelId, req, res, io) => {
   console.log(`📊 Web bug requested: ${pixelId}`);
-  console.log(`📋 Request headers:`, JSON.stringify(req.headers, null, 2));
   
-  const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+  // Extract client information with multiple fallbacks
+  const ip = req.headers['x-forwarded-for'] || 
+             req.headers['x-real-ip'] || 
+             req.connection.remoteAddress;
+             
   const ua = req.get('User-Agent');
+  const mailClient = detectEmailClient(ua);
 
-  // 1) Verify pixel exists and get user email
+  // Add additional headers for better caching prevention
+  const headers = {
+    'Content-Type': 'image/png',
+    'Cache-Control': 'private, no-cache, no-store, must-revalidate, max-age=0',
+    'Pragma': 'no-cache',
+    'Expires': '0',
+    'Last-Modified': (new Date()).toUTCString(),
+    'ETag': `"${Date.now()}"`,
+    'Vary': '*'
+  };
+
+  // Apply headers
+  Object.entries(headers).forEach(([key, value]) => res.set(key, value));
+
+  // 1) Verify pixel exists and get user email with better error handling
   db.get(
     `SELECT tp.id, tp.user_email, tp.campaign_id, c.name as campaign_name 
      FROM tracking_pixels tp
@@ -41,75 +69,61 @@ const logOpen = async (pixelId, req, res, io) => {
     async (err, row) => {
       if (err || !row) {
         console.error('❌ Error verifying pixel:', err);
-        // Always return a pixel image even on error
-        res.set('Content-Type', 'image/png');
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-        res.set('Pragma', 'no-cache');
-        res.set('Expires', '0');
         return res.send(TRANSPARENT_PIXEL);
       }
 
-      console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}`);
+      console.log(`✅ Found tracking pixel for user: ${row.user_email}, campaign: ${row.campaign_name}, client: ${mailClient}`);
 
-      // Check if this email has already opened this campaign (without considering IP)
-      db.get(
-        `SELECT COUNT(*) as count
-         FROM open_logs ol
-         JOIN tracking_pixels tp ON ol.pixel_id = tp.id
-         WHERE tp.user_email = ? AND tp.campaign_id = ?`,
-        [row.user_email, row.campaign_id],
-        (countErr, countRow) => {
-          if (!countErr && countRow.count === 0) {
-            // This is a unique open for this email, log it
-            db.run(
-              `INSERT INTO open_logs (pixel_id, ip, userAgent) VALUES (?, ?, ?)`,
-              [pixelId, ip, ua],
-              async function(err) {
-                if (err) {
-                  console.error('❌ Error logging open:', err);
-                } else {
-                  console.log(`✅ Successfully logged unique open with ID: ${this.lastID} for pixel: ${pixelId}`);
-                  
-                  if (io) {
-                    const openData = {
-                      campaignId: row.campaign_id,
-                      campaignName: row.campaign_name,
-                      userEmail: row.user_email,
-                      timestamp: new Date().toISOString(),
-                      ip: ip,
-                      userAgent: ua
-                    };
-                    io.emit('email:opened', openData);
-                  }
-                }
-                
-                // Return the tracking pixel
-                try {
-                  const webBug = generateWebBug();
-                  res.set('Content-Type', 'image/png');
-                  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-                  res.set('Pragma', 'no-cache');
-                  res.set('Expires', '0');
-                  res.set('Last-Modified', (new Date()).toUTCString());
-                  res.send(webBug);
-                } catch (error) {
-                  console.error('❌ Error generating web bug:', error);
-                  res.send(TRANSPARENT_PIXEL);
-                }
-              }
-            );
+      // Log every open attempt with client info
+      db.run(
+        `INSERT INTO open_logs (pixel_id, ip, userAgent, email_client) VALUES (?, ?, ?, ?)`,
+        [pixelId, ip, ua, mailClient],
+        function(err) {
+          if (err) {
+            console.error('❌ Error logging open:', err);
           } else {
-            // Not a unique open, just return the pixel
-            res.set('Content-Type', 'image/png');
-            res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-            res.set('Pragma', 'no-cache');
-            res.set('Expires', '0');
+            console.log(`✅ Successfully logged open with ID: ${this.lastID} for pixel: ${pixelId}`);
+            
+            if (io) {
+              const openData = {
+                campaignId: row.campaign_id,
+                campaignName: row.campaign_name,
+                userEmail: row.user_email,
+                timestamp: new Date().toISOString(),
+                ip: ip,
+                userAgent: ua,
+                emailClient: mailClient
+              };
+              io.emit('email:opened', openData);
+            }
+          }
+          
+          // Return the tracking pixel
+          try {
+            const webBug = generateWebBug();
+            res.send(webBug);
+          } catch (error) {
+            console.error('❌ Error generating web bug:', error);
             res.send(TRANSPARENT_PIXEL);
           }
         }
       );
     }
   );
+};
+
+// Helper function to detect email client
+const detectEmailClient = (userAgent = '') => {
+  userAgent = userAgent.toLowerCase();
+  
+  if (userAgent.includes('thunderbird')) return 'Thunderbird';
+  if (userAgent.includes('outlook')) return 'Outlook';
+  if (userAgent.includes('apple-mail')) return 'Apple Mail';
+  if (userAgent.includes('gmail')) return 'Gmail';
+  if (userAgent.includes('protonmail')) return 'ProtonMail';
+  if (userAgent.includes('yahoo')) return 'Yahoo Mail';
+  
+  return 'Unknown';
 };
 
 // Get all email opens for a campaign

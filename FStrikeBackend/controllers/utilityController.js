@@ -93,6 +93,11 @@ const extract = async (req, res) => {
       const linkTags = $('link[rel="stylesheet"]');
       const fetchPromises = [];
       let fetchedStyles = 0;
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Assets fetch timeout')), 5000);
+      });
 
       linkTags.each(function() {
         const link = $(this);
@@ -109,7 +114,7 @@ const extract = async (req, res) => {
         }
 
         // Create a promise that resolves regardless of success/failure
-        const fetchPromise = axios.get(absoluteUrl, { headers, timeout: 10000 })
+        const fetchPromise = axios.get(absoluteUrl, { headers, timeout: 5000 })
           .then(cssResponse => {
             // Replace the link tag with an inline style tag
             link.replaceWith(`<style>${cssResponse.data}</style>`);
@@ -118,7 +123,7 @@ const extract = async (req, res) => {
           })
           .catch(err => {
             console.error(`Failed to fetch CSS from ${absoluteUrl}:`, err.message);
-            // Keep the original link tag
+            link.remove(); // Remove failed CSS links
           });
 
         fetchPromises.push(fetchPromise);
@@ -138,7 +143,7 @@ const extract = async (req, res) => {
                 const importUrl = urlMatch[1];
                 try {
                   const absoluteImportUrl = new URL(importUrl, fullUrl).href;
-                  const fetchPromise = axios.get(absoluteImportUrl, { headers, timeout: 10000 })
+                  const fetchPromise = axios.get(absoluteImportUrl, { headers, timeout: 5000 })
                     .then(cssResponse => {
                       // Add the imported CSS to the style tag content
                       const newContent = styleContent.replace(importMatch, cssResponse.data);
@@ -147,10 +152,16 @@ const extract = async (req, res) => {
                     })
                     .catch(err => {
                       console.error(`Failed to fetch imported CSS from ${absoluteImportUrl}:`, err.message);
+                      // Remove the @import line that failed
+                      const newContent = styleContent.replace(importMatch, '');
+                      styleTag.html(newContent);
                     });
                   fetchPromises.push(fetchPromise);
                 } catch (e) {
                   console.error(`Invalid import URL: ${importUrl}`);
+                  // Remove the invalid @import line
+                  const newContent = styleContent.replace(importMatch, '');
+                  styleTag.html(newContent);
                 }
               }
             });
@@ -159,7 +170,16 @@ const extract = async (req, res) => {
       });
 
       // Wait for all CSS fetches to complete or timeout after 5 seconds
-      await Promise.allSettled(fetchPromises);
+      try {
+        await Promise.race([
+          Promise.allSettled(fetchPromises),
+          timeoutPromise
+        ]);
+      } catch (error) {
+        if (error.message === 'Assets fetch timeout') {
+          console.log('Asset fetching timed out after 5 seconds, proceeding with partial content');
+        }
+      }
       console.log(`Fetched ${fetchedStyles} stylesheets`);
     } catch (cssError) {
       console.error('Error processing CSS:', cssError.message);
@@ -245,4 +265,4 @@ const extract = async (req, res) => {
 module.exports = {
   importEmail,
   extract
-}; 
+};

@@ -145,7 +145,7 @@ const NewLandingPageModal = ({ isOpen, onClose, onSave, editData }) => {
                                 value={redirectTo}
                                 onChange={(e) => setRedirectTo(e.target.value)}
                                 placeholder="www.example.com"
-                                pattern="^(https?:\/\/)?(www\.)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$"
+                                pattern="^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+\.[a-zA-Z]{2,}$"
                                 className="mt-1 w-full border border-gray-300 rounded-md p-2"
                             />
                         </div>

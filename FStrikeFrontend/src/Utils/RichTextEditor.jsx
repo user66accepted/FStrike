@@ -51,42 +51,92 @@ const RichTextEditor = ({ value, onChange }) => {
   // When in iframe mode, update its document when editorContent changes.
   useEffect(() => {
     if (!isSourceMode && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
-      doc.open();
-      doc.write(editorContent);
-      doc.close();
-      // Enable design mode for editing.
-      doc.designMode = "on";
-      // Attach input listener to capture changes.
-      doc.body.oninput = handleInput;
+      try {
+        const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
+        doc.open();
+        doc.write(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <style>
+                body { 
+                  font-family: Arial, sans-serif;
+                  margin: 8px;
+                  padding: 0;
+                }
+                img, table, iframe, pre {
+                  max-width: 100%;
+                  height: auto;
+                }
+              </style>
+            </head>
+            <body>${editorContent}</body>
+          </html>
+        `);
+        doc.close();
+        
+        // Wait for document to be ready before setting up
+        const setupEditor = () => {
+          if (doc.readyState === 'complete') {
+            doc.designMode = "on";
+            doc.body.addEventListener('input', handleInput);
+          } else {
+            setTimeout(setupEditor, 10);
+          }
+        };
+        setupEditor();
+        
+        // Cleanup listener when component unmounts or mode changes
+        return () => {
+          try {
+            doc.body?.removeEventListener('input', handleInput);
+          } catch (e) {
+            console.warn('Error cleaning up editor:', e);
+          }
+        };
+      } catch (e) {
+        console.error('Error initializing editor:', e);
+      }
     }
   }, [editorContent, isSourceMode]);
 
   // Handle content changes from iframe (WYSIWYG mode) or textarea (source mode).
   const handleInput = () => {
-    if (!isSourceMode && iframeRef.current) {
-      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
-      const content = doc.body.innerHTML;
-      setEditorContent(content);
-      onChange(content);
-    } else if (isSourceMode && textareaRef.current) {
-      const content = textareaRef.current.value;
-      setEditorContent(content);
-      onChange(content);
+    try {
+      if (!isSourceMode && iframeRef.current) {
+        const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
+        if (doc && doc.body) {
+          const content = doc.body.innerHTML;
+          setEditorContent(content);
+          onChange(content);
+        }
+      } else if (isSourceMode && textareaRef.current) {
+        const content = textareaRef.current.value;
+        setEditorContent(content);
+        onChange(content);
+      }
+    } catch (e) {
+      console.error('Error handling input:', e);
     }
   };
 
   // Execute command on the appropriate document.
   const execCommand = (command, arg = null) => {
-    let targetDoc;
-    if (!isSourceMode && iframeRef.current) {
-      targetDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
-    } else {
-      // For source mode, use the main document on the textarea.
-      targetDoc = document;
+    try {
+      let targetDoc;
+      if (!isSourceMode && iframeRef.current) {
+        targetDoc = iframeRef.current.contentDocument || iframeRef.current.contentWindow.document;
+      } else {
+        // For source mode, use the main document on the textarea.
+        targetDoc = document;
+      }
+      if (targetDoc) {
+        targetDoc.execCommand(command, false, arg);
+        handleInput();
+      }
+    } catch (e) {
+      console.error('Error executing command:', e);
     }
-    targetDoc.execCommand(command, false, arg);
-    handleInput();
   };
 
   // Command helpers.
@@ -389,8 +439,7 @@ const RichTextEditor = ({ value, onChange }) => {
           }}
         />
       )}
-      {/* Inline CSS to constrain inner elements */}
-      <style jsx>{`
+      <style>{`
         .rich-text-editor img,
         .rich-text-editor table,
         .rich-text-editor iframe,

@@ -277,26 +277,42 @@ const launchCampaign = async (req, res) => {
           );
         });
         
-        // Add tracking pixel if enabled
-        let emailHtml = modifiedEmailHtml.replace(/\{name\}/g, user.first_name || '')
-                                       .replace(/\{email\}/g, user.email || '');
-        
         // Add tracking web bug if enabled
         if (campaign.add_tracking_image) {
-          // Add single tracking pixel at the end of the email
-          const trackingUrl = await trackingService.generateTrackingUrl(trackingId);
+          // Create multi-layered tracking system for better compatibility
           const webBug = `
             <!-- Mail tracking -->
-            <div style="line-height:0;font-size:0;height:0;display:none">
-              <img src="${trackingUrl}" 
+            <div style="line-height:0;font-size:0;height:0">
+              <!-- Primary tracker -->
+              <img src="https://railtel.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
                    width="1" 
                    height="1" 
-                   alt="" 
-                   style="width:1px!important;height:1px!important;border:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99"
-              />
+                   border="0"
+                   style="height:1px!important;width:1px!important;border-width:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99"
+                   alt="" />
+              <!-- Secondary tracker (GIF format) -->
+              <img src="https://railtel.ddns.net/track/${trackingId}/pixel.gif?t=${Date.now()}"
+                   style="display:none;width:1px;height:1px;"
+                   alt="" />
+              <!-- Tertiary tracker -->
+              <img src="https://railtel.ddns.net/t/${trackingId}/p.png?t=${Date.now()}"
+                   style="visibility:hidden;width:1px;height:1px;"
+                   alt="" />
             </div>`;
-          emailHtml = `${emailHtml}${webBug}`;
+            
+          // Add the tracking pixels at both the beginning and end of the email to maximize chances of loading
+          emailHtml = `${webBug}${emailHtml}${webBug}`;
         }
+
+        // Additional email headers to prevent caching
+        const customHeaders = {
+          'X-Entity-Ref-ID': trackingId,
+          'Precedence': 'bulk',
+          'X-Auto-Response-Suppress': 'OOF, AutoReply',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        };
 
         // Send the email with mail options
         const mailOptions = {
@@ -429,13 +445,21 @@ const getCampaignLogs = async (req, res) => {
     // 4. Get all link clicks for this campaign
     const linkClicks = await landingPageService.getCampaignClicks(id);
     
-    // 5. Calculate unique statistics
+    // 5. Calculate unique statistics and identify spam opens
     const uniqueOpenEmails = Array.from(new Set(openedEmails.map(item => item.email)));
     const totalUniqueOpens = uniqueOpenEmails.length;
     
-    // Count unique IP addresses for clicks as a proxy for unique users
     const uniqueClickIPs = Array.from(new Set(linkClicks.map(item => item.ip_address)));
     const totalUniqueClicks = uniqueClickIPs.length;
+
+    // Calculate spam opens (opens within 5 seconds)
+    const spamOpens = openedEmails.filter(open => {
+      const sentEmail = sentEmails.find(sent => sent.user_email === open.user_email);
+      if (!sentEmail) return false;
+      
+      const timeDiff = new Date(open.timestamp) - new Date(sentEmail.createdAt);
+      return timeDiff <= 5000; // 5 seconds in milliseconds
+    });
 
     return res.json({
       campaign: campaign,
@@ -447,7 +471,11 @@ const getCampaignLogs = async (req, res) => {
         email: open.user_email,
         openedAt: open.timestamp,
         ip: open.ip,
-        userAgent: open.userAgent
+        userAgent: open.userAgent,
+        isSpam: spamOpens.some(spam => 
+          spam.user_email === open.user_email && 
+          spam.timestamp === open.timestamp
+        )
       })),
       clicks: linkClicks.map(click => ({
         clickedAt: click.created_at,
@@ -459,7 +487,8 @@ const getCampaignLogs = async (req, res) => {
         totalOpened: openedEmails.length,
         totalClicks: linkClicks.length,
         uniqueOpens: totalUniqueOpens,
-        uniqueClicks: totalUniqueClicks
+        uniqueClicks: totalUniqueClicks,
+        spamOpens: spamOpens.length
       }
     });
   } catch (err) {

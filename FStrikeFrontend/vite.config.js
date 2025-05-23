@@ -9,8 +9,8 @@ export default defineConfig({
     react()
   ],
   server: {
-    host: '0.0.0.0', // Listen on all local IPs
-    port: 5173,      // Default Vite port
-    strictPort: true // Don't try another port if this one is taken
+    host: '0.0.0.0', 
+    port: 5174, 
+    strictPort: false
   }
 })

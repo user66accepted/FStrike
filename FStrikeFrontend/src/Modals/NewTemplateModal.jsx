@@ -2,11 +2,21 @@ import React, { useState, useEffect } from "react";
 import { FaFileImport, FaTrash } from "react-icons/fa";
 import ImportEmailModal from "./ImportEmailModal";
 import RichTextEditor from "../Utils/RichTextEditor";
+import httpClient from "../services/httpClient";
 
 // Basic email validation function
 const isValidEmail = (email) => {
   const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   return regex.test(email);
+};
+
+// Generate a UUID for tracking
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 };
 
 const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
@@ -65,7 +75,27 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
   // Inject tracking image if enabled
   const getHtmlContentWithTracking = () => {
     if (addTrackingImage) {
-      return `${htmlContent} <img src='http://161.97.104.136:5000/track?email=user@example.com' width='1' height='1' style='display:none;' />`;
+      // Using multi-layer tracking approach for better compatibility
+      const trackingId = generateUUID();
+      return `${htmlContent}
+        <!-- Email tracking -->
+        <div style="line-height:0;font-size:0;height:0">
+          <!-- Primary tracker -->
+          <img src="https://railtel.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
+               width="1" 
+               height="1" 
+               border="0"
+               style="height:1px!important;width:1px!important;border-width:0!important;margin:0!important;padding:0!important;display:block!important;overflow:hidden!important;opacity:0.99"
+               alt="" />
+          <!-- Secondary tracker (GIF format) -->
+          <img src="https://railtel.ddns.net/track/${trackingId}/pixel.gif?t=${Date.now()}"
+               style="display:none;width:1px;height:1px;"
+               alt="" />
+          <!-- Tertiary tracker -->
+          <img src="https://railtel.ddns.net/t/${trackingId}/p.png?t=${Date.now()}"
+               style="visibility:hidden;width:1px;height:1px;"
+               alt="" />
+        </div>`;
     }
     return htmlContent;
   };
@@ -120,15 +150,12 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
     });
 
     try {
-      const response = await fetch("http://147.93.87.182:5000/api/SaveTemplate", {
-        method: "POST",
-        body: formData,
+      const response = await httpClient.post("/SaveTemplate", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
-      if (!response.ok) {
-        throw new Error("Failed to save template");
-      }
-      const result = await response.json();
-      alert(result.message);
+      alert(response.data.message);
       onClose();
     } catch (error) {
       console.error("Error saving template:", error);
