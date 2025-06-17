@@ -1,7 +1,7 @@
 require('dotenv').config();
 
 const config = {
-  port: process.env.PORT || 5000,
+  port: process.env.PORT || 5001, // Changed from 5000 to 5001
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration - force HTTP
