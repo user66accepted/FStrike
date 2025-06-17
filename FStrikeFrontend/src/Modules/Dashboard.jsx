@@ -16,6 +16,7 @@ import httpClient from "../services/httpClient";
 import { fetchCampaigns } from "../services/apiService";
 import CampaignStatistics from "../components/Charts/CampaignStatistics";
 import FormDataList from "../components/FormSubmissions/FormDataList";
+import LoginAttemptsList from "../components/LoginAttempts/LoginAttemptsList";
 import RecentCampaigns from "./Campaigns/RecentCampaigns";
 
 // Register Chart.js components and plugins
@@ -249,6 +250,9 @@ const Dashboard = () => {
             {campaignStats ? (
               <>
                 <CampaignStatistics stats={campaignStats} />
+                
+                {/* Login Attempts Section */}
+                <LoginAttemptsList campaignId={selectedCampaign.id} />
                 
                 {/* Form Submissions Section */}
                 <FormDataList campaignId={selectedCampaign.id} />

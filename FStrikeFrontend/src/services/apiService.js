@@ -103,4 +103,25 @@ export const extractSite = async (url) => {
     console.error('Error extracting site:', error);
     throw error;
   }
-}; 
+};
+
+export const fetchLoginAttempts = async (campaignId) => {
+  try {
+    const response = await httpClient.get(`/GetLoginAttempts/${campaignId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching login attempts:', error);
+    throw error;
+  }
+};
+
+export const downloadCookies = async (loginAttemptId) => {
+  try {
+    // Use direct fetch instead of httpClient for binary responses
+    window.open(`${config.API_BASE_URL}/DownloadCookies/${loginAttemptId}`, '_blank');
+    return true;
+  } catch (error) {
+    console.error('Error downloading cookies:', error);
+    throw error;
+  }
+};

