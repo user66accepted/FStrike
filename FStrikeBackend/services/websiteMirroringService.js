@@ -27,9 +27,9 @@ class WebsiteMirroringService {
       const sessionId = await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO WebsiteMirroringSessions 
-           (campaign_id, target_url, session_token, status) 
-           VALUES (?, ?, ?, ?)`,
-          [campaignId, normalizedUrl, sessionToken, 'active'],
+           (campaign_id, target_url, session_token, status, proxy_port) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [campaignId, normalizedUrl, sessionToken, 'active', 5000],
           function(err) {
             if (err) reject(err);
             else resolve(this.lastID);
