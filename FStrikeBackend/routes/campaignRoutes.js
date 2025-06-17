@@ -11,4 +11,9 @@ router.post('/CloseCampaign/:id', campaignController.closeCampaign);
 router.get('/GetCampaignLogs/:id', campaignController.getCampaignLogs);
 router.get('/GetFormSubmissions/:id', campaignController.getFormSubmissions);
 
-module.exports = router; 
+// Website mirroring routes
+router.get('/GetMirrorSession/:campaignId', campaignController.getMirrorSession);
+router.post('/StopMirrorSession/:sessionId', campaignController.stopMirrorSession);
+router.get('/track-mirror-view/:sessionId', campaignController.trackMirrorView);
+
+module.exports = router;

@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 const trackingService = require('../services/trackingService');
 const landingPageService = require('../services/landingPageService');
+const websiteMirroringService = require('../services/websiteMirroringService');
 const config = require('../config');
 
 const saveCampaign = (req, res) => {
@@ -16,30 +17,42 @@ const saveCampaign = (req, res) => {
     profileId,
     groupId,
     useEvilginx,
-    evilginxUrl
+    evilginxUrl,
+    useWebsiteMirroring,
+    mirrorTargetUrl
   } = req.body;
 
   // Validate required fields
-  if (!name || !templateId || (!landingPageId && !useEvilginx) || !url || !launchDate || !profileId || !groupId) {
+  if (!name || !templateId || !url || !launchDate || !profileId || !groupId) {
     return res.status(400).json({ error: 'All required fields must be provided.' });
+  }
+
+  // Validate landing page options
+  if (!landingPageId && !useEvilginx && !useWebsiteMirroring) {
+    return res.status(400).json({ error: 'Landing page, Evilginx URL, or Website Mirroring must be selected.' });
   }
 
   if (useEvilginx && !evilginxUrl) {
     return res.status(400).json({ error: 'Evilginx URL is required when using Evilginx option.' });
   }
 
+  if (useWebsiteMirroring && !mirrorTargetUrl) {
+    return res.status(400).json({ error: 'Target URL is required when using Website Mirroring option.' });
+  }
+
   const query = `
     INSERT INTO Campaigns (
       name, template_id, landing_page_id, url, 
       launch_date, send_by_date, profile_id, group_id,
-      use_evilginx, evilginx_url
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      use_evilginx, evilginx_url, use_website_mirroring, mirror_target_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
 
   db.run(query, [
     name, templateId, landingPageId, url,
     launchDate, sendByDate, profileId, groupId,
-    useEvilginx ? 1 : 0, evilginxUrl
+    useEvilginx ? 1 : 0, evilginxUrl,
+    useWebsiteMirroring ? 1 : 0, mirrorTargetUrl
   ], function(err) {
     if (err) {
       console.error('Error saving campaign:', err.message);
@@ -202,10 +215,29 @@ const launchCampaign = async (req, res) => {
       return res.status(400).json({ error: `Campaign is already ${campaign.status.toLowerCase()}` });
     }
 
-    // 2. Generate landing page URL or use evilginx URL
+    // 2. Generate landing page URL, use evilginx URL, or create website mirror
     let landingPageUrl;
     try {
-      if (campaign.use_evilginx) {
+      if (campaign.use_website_mirroring) {
+        // Create website mirroring session
+        console.log(`Setting up website mirroring for: ${campaign.mirror_target_url} for campaign ${id}`);
+        const mirrorSession = await websiteMirroringService.createMirrorSession(id, campaign.mirror_target_url);
+        landingPageUrl = mirrorSession.proxyUrl;
+        
+        // Update campaign with mirror proxy port
+        await new Promise((resolve, reject) => {
+          db.run(
+            `UPDATE Campaigns SET mirror_proxy_port = ? WHERE id = ?`,
+            [mirrorSession.proxyPort, id],
+            (err) => {
+              if (err) reject(err);
+              resolve();
+            }
+          );
+        });
+        
+        console.log(`Website mirroring active: ${landingPageUrl} -> ${campaign.mirror_target_url}`);
+      } else if (campaign.use_evilginx) {
         landingPageUrl = campaign.evilginx_url;
         console.log(`Using Evilginx URL: ${landingPageUrl} for campaign ${id}`);
       } else {
@@ -564,6 +596,62 @@ const getFormSubmissions = async (req, res) => {
   }
 };
 
+// Website mirroring controller methods
+const getMirrorSession = async (req, res) => {
+  const { campaignId } = req.params;
+  
+  try {
+    const session = await websiteMirroringService.getMirrorSession(campaignId);
+    if (!session) {
+      return res.status(404).json({ error: 'No active mirroring session found for this campaign' });
+    }
+    
+    res.json({ session });
+  } catch (err) {
+    console.error('Error getting mirror session:', err.message);
+    return res.status(500).json({ error: 'Failed to get mirror session', details: err.message });
+  }
+};
+
+const stopMirrorSession = async (req, res) => {
+  const { sessionId } = req.params;
+  
+  try {
+    await websiteMirroringService.stopMirrorSession(parseInt(sessionId));
+    res.json({ message: 'Mirror session stopped successfully' });
+  } catch (err) {
+    console.error('Error stopping mirror session:', err.message);
+    return res.status(500).json({ error: 'Failed to stop mirror session', details: err.message });
+  }
+};
+
+const trackMirrorView = async (req, res) => {
+  const { sessionId } = req.params;
+  
+  try {
+    // Track the mirror view
+    await websiteMirroringService.trackAccess(parseInt(sessionId), req);
+    
+    // Return a 1x1 transparent pixel
+    const pixel = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    
+    res.writeHead(200, {
+      'Content-Type': 'image/png',
+      'Content-Length': pixel.length,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    res.end(pixel);
+  } catch (err) {
+    console.error('Error tracking mirror view:', err.message);
+    res.status(500).json({ error: 'Failed to track view' });
+  }
+};
+
 module.exports = {
   saveCampaign,
   getCampaigns,
@@ -571,5 +659,8 @@ module.exports = {
   launchCampaign,
   closeCampaign,
   getCampaignLogs,
-  getFormSubmissions
+  getFormSubmissions,
+  getMirrorSession,
+  stopMirrorSession,
+  trackMirrorView
 };

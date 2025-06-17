@@ -160,6 +160,9 @@ db.serialize(() => {
       landing_page_url TEXT,
       use_evilginx INTEGER DEFAULT 0,
       evilginx_url TEXT,
+      use_website_mirroring INTEGER DEFAULT 0,
+      mirror_target_url TEXT,
+      mirror_proxy_port INTEGER,
       FOREIGN KEY (template_id) REFERENCES EmailTemplates(id),
       FOREIGN KEY (landing_page_id) REFERENCES LandingPages(id),
       FOREIGN KEY (profile_id) REFERENCES SendingProfiles(id),
@@ -216,6 +219,36 @@ db.serialize(() => {
     )
   `);
   
+  // Create website mirroring data table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS WebsiteMirroringSessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      target_url TEXT NOT NULL,
+      proxy_port INTEGER NOT NULL,
+      status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'error')),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_accessed DATETIME,
+      access_count INTEGER DEFAULT 0,
+      FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Create mirrored content cache table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS MirroredContentCache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      url_path TEXT NOT NULL,
+      content_type TEXT,
+      cached_content BLOB,
+      cache_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expiry_time DATETIME,
+      FOREIGN KEY (session_id) REFERENCES WebsiteMirroringSessions(id) ON DELETE CASCADE,
+      UNIQUE(session_id, url_path)
+    )
+  `);
+
   // Log table creation success
   console.log('Tracking tables initialized');
 });
