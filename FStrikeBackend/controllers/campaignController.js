@@ -360,6 +360,22 @@ const launchCampaign = async (req, res) => {
           );
         });
 
+        // Modify the email HTML content with personalized URLs for this user
+        let modifiedEmailHtml;
+        
+        // For website mirroring, we need personalized tracking in the URL
+        if (campaign.use_website_mirroring) {
+          modifiedEmailHtml = landingPageService.injectLandingPageUrl(
+            campaign.emailHtml, 
+            landingPageUrl, 
+            trackingId  // Pass the unique tracking ID for personalizing the mirrored website link
+          );
+          console.log(`Personalized website mirroring URL with tracking ID ${trackingId} for ${user.email}`);
+        } else {
+          // For regular landing pages, we don't need to personalize the URL in the same way
+          modifiedEmailHtml = landingPageService.injectLandingPageUrl(campaign.emailHtml, landingPageUrl);
+        }
+
         // Add tracking web bug if enabled
         let finalHtmlContent = modifiedEmailHtml;
         if (campaign.add_tracking_image) {

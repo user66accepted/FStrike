@@ -391,54 +391,139 @@ const registerLandingPageRoutes = (app) => {
 
 
 /**
- * Replaces links in an email template with the landing page URL
+ * Replaces links in an email template with the landing page URL or mirroring URL
  * @param {string} htmlContent - The email HTML content
- * @param {string} landingPageUrl - The URL to the landing page
+ * @param {string} landingPageUrl - The URL to the landing page or mirroring proxy
+ * @param {string} trackingId - Unique tracking ID for this recipient (optional)
  * @returns {string} - Updated HTML content
  */
-const injectLandingPageUrl = (htmlContent, landingPageUrl) => {
+const injectLandingPageUrl = (htmlContent, landingPageUrl, trackingId = null) => {
   console.log(`Injecting landing page URL: ${landingPageUrl} into email template`);
+  if (trackingId) {
+    console.log(`Using tracking ID: ${trackingId} for personalized links`);
+  }
 
   if (!htmlContent) {
     console.error('Email HTML content is empty or undefined');
     return htmlContent || '';
   }
 
-  // No need to modify the URL format anymore since we're using direct UUID format
-
-  // Replace href attributes in anchor tags
-  let updatedHtml = htmlContent.replace(
-    /<a\s+(?:[^>]*?\s+)?href=(['"])(.*?)\1/gi,
-    (match, quote, url) => {
-      // Don't replace email links (mailto:) or anchor links (#)
-      if (url.startsWith('mailto:') || url.startsWith('#')) {
-        return match;
+  // Check if this is a website mirroring URL (contains a 32-character hex session token)
+  const sessionTokenMatch = landingPageUrl.match(/\/([0-9a-f]{32})(?:\/|$)/i);
+  const isMirroringUrl = !!sessionTokenMatch;
+  
+  if (isMirroringUrl && trackingId) {
+    // For website mirroring, create a tracking URL that includes the user's tracking ID
+    const mirroringTrackingUrl = `${landingPageUrl}?_fstrike_track=${trackingId}`;
+    console.log(`Created mirroring tracking URL: ${mirroringTrackingUrl}`);
+    
+    // Replace ALL links (href, form actions, onclick events) with the mirroring URL
+    let updatedHtml = htmlContent;
+    
+    // Replace href attributes in anchor tags
+    updatedHtml = updatedHtml.replace(
+      /<a\s+(?:[^>]*?\s+)?href=(['"])(.*?)\1/gi,
+      (match, quote, url) => {
+        // Don't replace email links (mailto:) or anchor links (#) or javascript links
+        if (url.startsWith('mailto:') || url.startsWith('#') || url.startsWith('javascript:')) {
+          return match;
+        }
+        console.log(`Replacing link: ${url} with mirroring URL: ${mirroringTrackingUrl}`);
+        return `<a href=${quote}${mirroringTrackingUrl}${quote}`;
       }
-      console.log(`Replacing link: ${url} with: ${landingPageUrl}`);
-      return `<a href=${quote}${landingPageUrl}${quote}`;
-    }
-  );
+    );
 
-  // Replace form action attributes
-  updatedHtml = updatedHtml.replace(
-    /<form\s+(?:[^>]*?\s+)?action=(['"])(.*?)\1/gi,
-    (match, quote, url) => {
-      console.log(`Replacing form action: ${url} with: ${landingPageUrl}`);
-      return `<form action=${quote}${landingPageUrl}${quote}`;
-    }
-  );
+    // Replace form action attributes
+    updatedHtml = updatedHtml.replace(
+      /<form\s+(?:[^>]*?\s+)?action=(['"])(.*?)\1/gi,
+      (match, quote, url) => {
+        console.log(`Replacing form action: ${url} with mirroring URL: ${mirroringTrackingUrl}`);
+        return `<form action=${quote}${mirroringTrackingUrl}${quote}`;
+      }
+    );
 
-  // Replace button onclick attributes that contain URLs or links
-  updatedHtml = updatedHtml.replace(
-    /<button\s+(?:[^>]*?\s+)?onclick=(['"])(?:.*?location.href=['"]|.*?window.open\(['"])(.*?)(['"])/gi,
-    (match, quote1, url, quote2) => {
-      console.log(`Replacing button onclick URL: ${url} with: ${landingPageUrl}`);
-      return `<button onclick=${quote1}window.location.href='${landingPageUrl}'${quote2}`;
-    }
-  );
+    // Replace button onclick attributes that contain URLs or redirect logic
+    updatedHtml = updatedHtml.replace(
+      /<button\s+([^>]*?)onclick=(['"])(.*?)\2/gi,
+      (match, beforeOnclick, quote, onclickContent) => {
+        // If onclick contains location.href, window.open, or similar redirect logic
+        if (/location\.href|window\.open|document\.location|window\.location/i.test(onclickContent)) {
+          console.log(`Replacing button onclick with mirroring URL`);
+          return `<button ${beforeOnclick}onclick=${quote}window.location.href='${mirroringTrackingUrl}'${quote}`;
+        }
+        return match; // Keep original if no redirect logic found
+      }
+    );
 
-  console.log(`HTML update completed, new size: ${updatedHtml.length} bytes`);
-  return updatedHtml;
+    // Add a general click handler script to catch any missed links
+    const trackingScript = `
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add click tracking to all clickable elements
+      var clickableElements = document.querySelectorAll('a, button, input[type="button"], input[type="submit"], [onclick]');
+      clickableElements.forEach(function(element) {
+        element.addEventListener('click', function(e) {
+          // For forms and submit buttons, let them submit normally
+          if (element.type === 'submit' || element.closest('form')) {
+            return;
+          }
+          
+          // For other clickable elements that don't have a proper href, redirect to mirroring URL
+          if (!element.href || (!element.href.startsWith('mailto:') && !element.href.startsWith('#') && !element.href.startsWith('javascript:'))) {
+            if (!element.getAttribute('data-fstrike-modified')) {
+              e.preventDefault();
+              window.location.href = '${mirroringTrackingUrl}';
+            }
+          }
+        });
+        element.setAttribute('data-fstrike-modified', 'true');
+      });
+    });
+    </script>`;
+    
+    // Insert the script before closing body tag
+    updatedHtml = updatedHtml.replace(/<\/body>/i, `${trackingScript}</body>`);
+    
+    console.log(`Website mirroring HTML update completed, new size: ${updatedHtml.length} bytes`);
+    return updatedHtml;
+  } else {
+    // Original logic for regular landing pages
+    console.log(`Using regular landing page URL injection`);
+    
+    // Replace href attributes in anchor tags
+    let updatedHtml = htmlContent.replace(
+      /<a\s+(?:[^>]*?\s+)?href=(['"])(.*?)\1/gi,
+      (match, quote, url) => {
+        // Don't replace email links (mailto:) or anchor links (#)
+        if (url.startsWith('mailto:') || url.startsWith('#')) {
+          return match;
+        }
+        console.log(`Replacing link: ${url} with: ${landingPageUrl}`);
+        return `<a href=${quote}${landingPageUrl}${quote}`;
+      }
+    );
+
+    // Replace form action attributes
+    updatedHtml = updatedHtml.replace(
+      /<form\s+(?:[^>]*?\s+)?action=(['"])(.*?)\1/gi,
+      (match, quote, url) => {
+        console.log(`Replacing form action: ${url} with: ${landingPageUrl}`);
+        return `<form action=${quote}${landingPageUrl}${quote}`;
+      }
+    );
+
+    // Replace button onclick attributes that contain URLs or links
+    updatedHtml = updatedHtml.replace(
+      /<button\s+(?:[^>]*?\s+)?onclick=(['"])(?:.*?location.href=['"]|.*?window.open\(['"])(.*?)(['"])/gi,
+      (match, quote1, url, quote2) => {
+        console.log(`Replacing button onclick URL: ${url} with: ${landingPageUrl}`);
+        return `<button onclick=${quote1}window.location.href='${landingPageUrl}'${quote2}`;
+      }
+    );
+
+    console.log(`Regular landing page HTML update completed, new size: ${updatedHtml.length} bytes`);
+    return updatedHtml;
+  }
 };
 
 /**
