@@ -24,7 +24,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
     profileId: '',
     groupId: '',
     useEvilginx: false,
-    evilginxUrl: ''
+    evilginxUrl: '',
+    useWebsiteMirroring: false,
+    mirrorTargetUrl: ''
   });
 
   useEffect(() => {
@@ -64,7 +66,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
         profileId: '',
         groupId: '',
         useEvilginx: false,
-        evilginxUrl: ''
+        evilginxUrl: '',
+        useWebsiteMirroring: false,
+        mirrorTargetUrl: ''
       });
       setValidationError(null);
     }
@@ -96,15 +100,21 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
       }
     }
 
-    // Landing page validation
-    if (!formData.useEvilginx && !formData.landingPageId) {
-      setValidationError('Landing page is required');
+    // Landing page validation - only required if not using Evilginx or Website Mirroring
+    if (!formData.useEvilginx && !formData.useWebsiteMirroring && !formData.landingPageId) {
+      setValidationError('Landing page is required (unless using Evilginx or Website Mirroring)');
       return false;
     }
 
     // Evilginx URL validation
     if (formData.useEvilginx && !formData.evilginxUrl) {
       setValidationError('Evilginx URL is required when using Evilginx option');
+      return false;
+    }
+
+    // Website mirroring URL validation
+    if (formData.useWebsiteMirroring && !formData.mirrorTargetUrl) {
+      setValidationError('Target URL is required for website mirroring');
       return false;
     }
 
@@ -119,6 +129,9 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
     if (!validateForm()) {
       return;
     }
+
+    // Debug: Log what we're about to send
+    console.log('Submitting campaign data:', formData);
 
     try {
       setSubmitting(true);
@@ -221,52 +234,102 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Landing Page:</label>
-            <div className="space-y-2">
-              <select 
-                name="landingPageId"
-                value={formData.landingPageId}
-                onChange={handleInputChange}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
-                disabled={loading || missingOptions.landingPages || formData.useEvilginx}
-              >
-                <option value="">Select Landing Page</option>
-                {landingPages.map(page => (
-                  <option key={page.id} value={page.id}>
-                    {page.page_name}
-                  </option>
-                ))}
-              </select>
+            <label className="block text-sm font-medium text-gray-700">Landing Page Options:</label>
+            <div className="space-y-3">
+              {/* Regular Landing Page Option */}
+              <div>
+                <select 
+                  name="landingPageId"
+                  value={formData.landingPageId}
+                  onChange={handleInputChange}
+                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
+                  disabled={loading || missingOptions.landingPages || formData.useEvilginx || formData.useWebsiteMirroring}
+                >
+                  <option value="">Select Landing Page</option>
+                  {landingPages.map(page => (
+                    <option key={page.id} value={page.id}>
+                      {page.page_name}
+                    </option>
+                  ))}
+                </select>
+              </div>
               
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="useEvilginx"
-                  checked={formData.useEvilginx}
-                  onChange={(e) => {
-                    setFormData(prev => ({
-                      ...prev,
-                      useEvilginx: e.target.checked,
-                      landingPageId: e.target.checked ? '' : prev.landingPageId
-                    }));
-                  }}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <label htmlFor="useEvilginx" className="text-sm text-gray-700">
-                  Enter Evilginx URL
-                </label>
+              {/* Evilginx Option */}
+              <div className="border rounded-md p-3 bg-gray-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="useEvilginx"
+                    checked={formData.useEvilginx}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        useEvilginx: e.target.checked,
+                        landingPageId: e.target.checked ? '' : prev.landingPageId,
+                        useWebsiteMirroring: e.target.checked ? false : prev.useWebsiteMirroring
+                      }));
+                    }}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <label htmlFor="useEvilginx" className="text-sm font-medium text-gray-700">
+                    🔗 Use Evilginx URL
+                  </label>
+                </div>
+                {formData.useEvilginx && (
+                  <input
+                    type="text"
+                    name="evilginxUrl"
+                    placeholder="Enter Evilginx URL"
+                    value={formData.evilginxUrl}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                  />
+                )}
               </div>
 
-              {formData.useEvilginx && (
-                <input
-                  type="text"
-                  name="evilginxUrl"
-                  placeholder="Enter Evilginx URL"
-                  value={formData.evilginxUrl}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
-                />
-              )}
+              {/* Website Mirroring Option */}
+              <div className="border rounded-md p-3 bg-blue-50">
+                <div className="flex items-center gap-2 mb-2">
+                  <input
+                    type="checkbox"
+                    id="useWebsiteMirroring"
+                    checked={formData.useWebsiteMirroring}
+                    onChange={(e) => {
+                      setFormData(prev => ({
+                        ...prev,
+                        useWebsiteMirroring: e.target.checked,
+                        landingPageId: e.target.checked ? '' : prev.landingPageId,
+                        useEvilginx: e.target.checked ? false : prev.useEvilginx
+                      }));
+                    }}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <label htmlFor="useWebsiteMirroring" className="text-sm font-medium text-gray-700">
+                    🌐 Real-time Website Mirroring
+                  </label>
+                </div>
+                {formData.useWebsiteMirroring && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      name="mirrorTargetUrl"
+                      placeholder="Enter website URL to mirror (e.g., facebook.com, gmail.com)"
+                      value={formData.mirrorTargetUrl}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                    />
+                    <div className="text-xs text-gray-600 bg-blue-100 p-2 rounded">
+                      <p className="font-medium mb-1">🚀 Real-time website mirroring will:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Create a live proxy of the target website</li>
+                        <li>Track all user interactions and form submissions</li>
+                        <li>Maintain full functionality of the original site</li>
+                        <li>Inject tracking pixels for comprehensive analytics</li>
+                      </ul>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

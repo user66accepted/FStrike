@@ -37,8 +37,8 @@ class WebsiteMirroringService {
         );
       });
 
-      // Create proxy URL using path-based routing on port 5001
-      const proxyUrl = `http://147.93.87.182:5001/${sessionToken}`;
+      // Create proxy URL using path-based routing on port 5000
+      const proxyUrl = `http://147.93.87.182:5000/${sessionToken}`;
       
       // Store session info
       const sessionData = {
@@ -60,7 +60,7 @@ class WebsiteMirroringService {
         sessionToken,
         proxyUrl,
         targetUrl: normalizedUrl,
-        proxyPort: 5001 // Always use port 5001
+        proxyPort: 5000 // Always use port 5000
       };
     } catch (error) {
       console.error('Error creating mirror session:', error);
@@ -99,7 +99,7 @@ class WebsiteMirroringService {
             campaignId: dbSession.campaign_id,
             targetUrl: dbSession.target_url,
             sessionToken,
-            proxyUrl: `http://147.93.87.182:5001/${sessionToken}`,
+            proxyUrl: `http://147.93.87.182:5000/${sessionToken}`,
             startTime: new Date(dbSession.created_at)
           });
           
