@@ -506,50 +506,102 @@ const getCampaignLogs = async (req, res) => {
   const { id } = req.params;
   
   try {
+    console.log(`Getting campaign logs for campaign ID: ${id}`);
+    
     // 1. Verify campaign exists
     const campaign = await new Promise((resolve, reject) => {
       db.get('SELECT id, name FROM Campaigns WHERE id = ?', [id], (err, row) => {
-        if (err) reject(err);
-        if (!row) reject(new Error('Campaign not found'));
+        if (err) {
+          console.error('Error fetching campaign:', err.message);
+          reject(err);
+        }
+        if (!row) {
+          console.error(`Campaign not found with id: ${id}`);
+          reject(new Error('Campaign not found'));
+        }
         resolve(row);
       });
     });
 
-    // 2. Get all tracking pixels for this campaign (sent emails)
-    const sentEmails = await new Promise((resolve, reject) => {
-      db.all(
-        `SELECT id, user_email, createdAt 
-         FROM tracking_pixels
-         WHERE campaign_id = ?
-         ORDER BY createdAt DESC`,
-        [id],
-        (err, rows) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    console.log(`Campaign found: ${campaign.name} (ID: ${id})`);
+
+    // 2. Get all tracking pixels for this campaign (sent emails) - check if table exists first
+    let sentEmails = [];
+    try {
+      // Check if tracking_pixels table exists
+      const trackingPixelsExists = await new Promise((resolve) => {
+        db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='tracking_pixels'", [], (err, row) => {
+          resolve(!!row);
+        });
+      });
+      
+      if (trackingPixelsExists) {
+        sentEmails = await new Promise((resolve, reject) => {
+          db.all(
+            `SELECT id, user_email, createdAt 
+             FROM tracking_pixels
+             WHERE campaign_id = ?
+             ORDER BY createdAt DESC`,
+            [id],
+            (err, rows) => {
+              if (err) {
+                console.error('Error fetching tracking pixels:', err.message);
+                reject(err);
+              } else {
+                resolve(rows || []);
+              }
+            }
+          );
+        });
+        console.log(`Found ${sentEmails.length} sent emails for campaign ${id}`);
+      } else {
+        console.log('tracking_pixels table does not exist yet');
+      }
+    } catch (err) {
+      console.error('Error fetching sent emails:', err.message);
+      // Continue execution with empty array instead of failing
+      sentEmails = [];
+    }
 
     // 3. Get all opens for this campaign
-    const openedEmails = await trackingService.getCampaignOpens(id);
+    let openedEmails = [];
+    try {
+      openedEmails = await trackingService.getCampaignOpens(id);
+      console.log(`Found ${openedEmails.length} opened emails for campaign ${id}`);
+    } catch (err) {
+      console.error('Error fetching email opens:', err.message);
+      // Continue with empty array instead of failing
+    }
     
     // 4. Get all link clicks for this campaign
-    const linkClicks = await landingPageService.getCampaignClicks(id);
+    let linkClicks = [];
+    try {
+      linkClicks = await landingPageService.getCampaignClicks(id);
+      console.log(`Found ${linkClicks.length} link clicks for campaign ${id}`);
+    } catch (err) {
+      console.error('Error fetching link clicks:', err.message);
+      // Continue with empty array instead of failing
+    }
     
     // 5. Calculate unique statistics and identify spam opens
-    const uniqueOpenEmails = Array.from(new Set(openedEmails.map(item => item.email)));
+    const uniqueOpenEmails = Array.from(new Set(openedEmails.map(item => item.email || '')));
     const totalUniqueOpens = uniqueOpenEmails.length;
     
-    const uniqueClickIPs = Array.from(new Set(linkClicks.map(item => item.ip_address)));
+    const uniqueClickIPs = Array.from(new Set(linkClicks.map(item => item.ip_address || '')));
     const totalUniqueClicks = uniqueClickIPs.length;
 
     // Calculate spam opens (opens within 5 seconds)
     const spamOpens = openedEmails.filter(open => {
-      const sentEmail = sentEmails.find(sent => sent.user_email === open.user_email);
+      const sentEmail = sentEmails.find(sent => sent.user_email === open.email);
       if (!sentEmail) return false;
       
-      const timeDiff = new Date(open.timestamp) - new Date(sentEmail.createdAt);
-      return timeDiff <= 5000; // 5 seconds in milliseconds
+      try {
+        const timeDiff = new Date(open.timestamp) - new Date(sentEmail.createdAt);
+        return timeDiff <= 5000; // 5 seconds in milliseconds
+      } catch (err) {
+        console.error('Error calculating time difference:', err.message);
+        return false;
+      }
     });
 
     // Calculate legitimate opens
@@ -559,6 +611,8 @@ const getCampaignLogs = async (req, res) => {
     const legitimateOpenPercentage = openedEmails.length > 0 ? (legitimateOpens / openedEmails.length) * 100 : 0;
     const spamOpenPercentage = openedEmails.length > 0 ? (spamOpens.length / openedEmails.length) * 100 : 0;
 
+    console.log('Successfully prepared campaign logs response');
+
     return res.json({
       campaign: campaign,
       sent: sentEmails.map(email => ({
@@ -566,12 +620,12 @@ const getCampaignLogs = async (req, res) => {
         sentAt: email.createdAt
       })),
       opened: openedEmails.map(open => ({
-        email: open.user_email,
+        email: open.email || open.user_email,
         openedAt: open.timestamp,
         ip: open.ip,
         userAgent: open.userAgent,
         isSpam: spamOpens.some(spam => 
-          spam.user_email === open.user_email && 
+          spam.email === (open.email || open.user_email) && 
           spam.timestamp === open.timestamp
         )
       })),
