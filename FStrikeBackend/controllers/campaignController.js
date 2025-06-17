@@ -22,9 +22,37 @@ const saveCampaign = (req, res) => {
     mirrorTargetUrl
   } = req.body;
 
-  // Validate required fields
-  if (!name || !templateId || !url || !launchDate || !profileId || !groupId) {
-    return res.status(400).json({ error: 'All required fields must be provided.' });
+  // Debug: Log received data
+  console.log('Received campaign data:', {
+    name,
+    templateId,
+    landingPageId,
+    url,
+    launchDate,
+    sendByDate,
+    profileId,
+    groupId,
+    useEvilginx,
+    evilginxUrl,
+    useWebsiteMirroring,
+    mirrorTargetUrl
+  });
+
+  // Validate required fields with specific error messages
+  const requiredFields = [
+    { field: name, name: 'name', label: 'Campaign name' },
+    { field: templateId, name: 'templateId', label: 'Email template' },
+    { field: url, name: 'url', label: 'URL' },
+    { field: launchDate, name: 'launchDate', label: 'Launch date' },
+    { field: profileId, name: 'profileId', label: 'Sending profile' },
+    { field: groupId, name: 'groupId', label: 'Group' }
+  ];
+
+  for (const { field, name: fieldName, label } of requiredFields) {
+    if (!field) {
+      console.log(`Missing field: ${fieldName} (${label})`);
+      return res.status(400).json({ error: `${label} is required.` });
+    }
   }
 
   // Validate landing page options
