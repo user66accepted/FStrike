@@ -138,29 +138,75 @@ class WebsiteMirroringService {
       if (req.method === 'POST') {
         return this.handleFormSubmission(session, req, res, fullTargetUrl);
       }
+      
+      // Create a random fingerprint for each request
+      const browserVersions = [
+        'Chrome/121.0.0.0',
+        'Chrome/122.0.0.0',
+        'Chrome/123.0.0.0'
+      ];
+      const randomBrowser = browserVersions[Math.floor(Math.random() * browserVersions.length)];
+      
+      // Determine if we should use a referrer
+      let referer = undefined;
+      if (req.headers.referer) {
+        // If user has a referer, use it but modify for our proxy
+        const refererUrl = new URL(req.headers.referer);
+        if (refererUrl.pathname.includes(`/${sessionToken}`)) {
+          // This is an internal referer, translate it to the target site
+          const refPath = refererUrl.pathname.replace(`/${sessionToken}`, '');
+          referer = `${targetUrl}${refPath}`;
+        }
+      } else if (Math.random() > 0.5) {
+        // Sometimes include a referer from a search engine
+        const searchReferers = [
+          'https://www.google.com/',
+          'https://www.bing.com/',
+          'https://search.yahoo.com/'
+        ];
+        referer = searchReferers[Math.floor(Math.random() * searchReferers.length)];
+      }
 
-      // Make request to target website
+      // Calculate hostname from the target URL
+      const targetHostname = new URL(fullTargetUrl).hostname;
+
+      // Make request to target website with improved headers
       const response = await axios({
         method: req.method,
         url: fullTargetUrl,
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
-          'Accept': req.headers.accept || 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': req.headers['accept-language'] || 'en-US,en;q=0.5',
-          'Accept-Encoding': 'gzip, deflate',
-          'DNT': '1',
+          'User-Agent': `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ${randomBrowser} Safari/537.36`,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br',
+          'Sec-Ch-Ua': '"Not A(Brand";v="99", "Google Chrome";v="121", "Chromium";v="121"',
+          'Sec-Ch-Ua-Mobile': '?0',
+          'Sec-Ch-Ua-Platform': '"Windows"',
+          'Sec-Fetch-Dest': 'document',
+          'Sec-Fetch-Mode': 'navigate',
+          'Sec-Fetch-Site': referer ? 'cross-site' : 'none',
+          'Sec-Fetch-User': '?1',
+          'Upgrade-Insecure-Requests': '1',
+          'Cache-Control': 'max-age=0',
+          'Host': targetHostname,
           'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
+          'DNT': '1',
+          ...(referer ? {'Referer': referer} : {}),
+          ...(req.headers.cookie ? {'Cookie': req.headers.cookie} : {})
         },
         responseType: 'arraybuffer',
         maxRedirects: 5,
         timeout: 15000,
-        decompress: true
+        decompress: true,
+        httpsAgent: new (require('https').Agent)({
+          rejectUnauthorized: false,
+          keepAlive: true
+        })
       });
 
       // Set response headers
       Object.keys(response.headers).forEach(key => {
-        if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
+        if (!['content-encoding', 'content-length', 'transfer-encoding', 'connection'].includes(key.toLowerCase())) {
           res.setHeader(key, response.headers[key]);
         }
       });
@@ -179,10 +225,74 @@ class WebsiteMirroringService {
 
     } catch (error) {
       console.error('Error handling mirror request:', error);
+      
+      // Provide more user-friendly error message
+      let errorMessage = 'Error loading mirrored content';
+      
       if (error.response) {
-        res.status(error.response.status).send(`Error loading content: ${error.response.statusText}`);
+        const status = error.response.status;
+        if (status === 400) {
+          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) rejected our request. This site might have bot protection measures in place.`;
+        } else if (status === 403) {
+          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) has denied access. This site may be blocking requests from our server.`;
+        } else if (status === 404) {
+          errorMessage = `The requested page was not found on the target site (${session?.targetUrl || 'unknown'}).`;
+        } else if (status >= 500) {
+          errorMessage = `The target site (${session?.targetUrl || 'unknown'}) is experiencing technical difficulties.`;
+        } else {
+          errorMessage = `Error loading content: ${error.response.statusText} (${status})`;
+        }
+        res.status(error.response.status).send(`
+          <html>
+            <head>
+              <title>Mirroring Error</title>
+              <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+                h1 { color: #d9534f; }
+                .message { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+                .try-again { margin-top: 20px; }
+              </style>
+            </head>
+            <body>
+              <h1>Mirroring Error</h1>
+              <div class="message">
+                <p>${errorMessage}</p>
+                <p>This could be due to:</p>
+                <ul>
+                  <li>Bot protection mechanisms on the target site</li>
+                  <li>Cloudflare or similar security services blocking our request</li>
+                  <li>Geographic restrictions on the content</li>
+                </ul>
+              </div>
+              <div class="try-again">
+                <p><a href="javascript:location.reload()">Try again</a> or try a different target URL.</p>
+              </div>
+            </body>
+          </html>
+        `);
       } else {
-        res.status(500).send('Error loading mirrored content');
+        res.status(500).send(`
+          <html>
+            <head>
+              <title>Mirroring Error</title>
+              <style>
+                body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+                h1 { color: #d9534f; }
+                .message { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+                .try-again { margin-top: 20px; }
+              </style>
+            </head>
+            <body>
+              <h1>Mirroring Error</h1>
+              <div class="message">
+                <p>Error loading mirrored content. The target site may be unavailable or blocking our request.</p>
+              </div>
+              <div class="try-again">
+                <p><a href="javascript:location.reload()">Try again</a> or try a different target URL.</p>
+              </div>
+            </body>
+          </html>
+        `);
       }
     }
   }
