@@ -224,6 +224,7 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS WebsiteMirroringSessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,
+      session_token TEXT NOT NULL UNIQUE,
       target_url TEXT NOT NULL,
       proxy_port INTEGER NOT NULL,
       status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'error')),
