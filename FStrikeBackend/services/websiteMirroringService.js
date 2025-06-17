@@ -5,11 +5,11 @@ const crypto = require('crypto');
 const { URL } = require('url');
 const tough = require('tough-cookie');
 const { CookieJar } = tough;
-const axiosCookieJarSupport = require('axios-cookiejar-support').default;
+const { wrapper } = require('axios-cookiejar-support');
 const querystring = require('querystring');
 
-// Enable cookie jar support for axios
-axiosCookieJarSupport(axios);
+// Create an axios instance with cookie jar support
+const axiosInstance = wrapper(axios.create());
 
 class WebsiteMirroringService {
   constructor() {
@@ -197,7 +197,7 @@ class WebsiteMirroringService {
       const targetOrigin = new URL(fullTargetUrl).origin;
 
       // Make request to target website with proper headers
-      const response = await axios({
+      const response = await axiosInstance({
         method: req.method,
         url: fullTargetUrl,
         headers: {
@@ -548,7 +548,7 @@ class WebsiteMirroringService {
       
       const cookieHeader = this.buildCookieHeader(req, cookieJar, targetUrl);
       
-      const response = await axios({
+      const response = await axiosInstance({
         method: 'POST',
         url: targetUrl,
         data: forwardData,
