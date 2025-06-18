@@ -164,7 +164,7 @@ const LoginAttemptsList = ({ campaignId }) => {
                 <div className="bg-white p-3 rounded border mt-1">
                   {attempt.hasCookies ? (
                     <div>
-                      <div className="mb-2">{attempt.cookiesCount} cookies captured</div>
+                      <div className="mb-2">{attempt.cookiesCount || attempt.cookies?.length || 0} cookies captured</div>
                       
                       <div className="flex flex-col space-y-2">
                         <button
