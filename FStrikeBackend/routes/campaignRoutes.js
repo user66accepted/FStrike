@@ -17,5 +17,6 @@ router.get('/DownloadCookies/:id', campaignController.downloadCookies);
 router.get('/GetMirrorSession/:campaignId', campaignController.getMirrorSession);
 router.post('/StopMirrorSession/:sessionId', campaignController.stopMirrorSession);
 router.get('/track-mirror-view/:sessionId', campaignController.trackMirrorView);
+router.get('/proxy-monitor/:sessionToken', campaignController.handleProxyMonitor);
 
 module.exports = router;

