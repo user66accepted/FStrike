@@ -1121,7 +1121,7 @@ class WebsiteMirroringService {
   /**
    * Handle proxy error gracefully
    */
-  handleProxyError(error, res, session) {
+  handleProxyError(error, res, sessionObj) {
     console.error('Proxy error:', error.message);
     
     let errorMessage = 'Error accessing the website';
@@ -1288,6 +1288,7 @@ class WebsiteMirroringService {
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       // Make request to target website with advanced anti-detection
+      // FIXED: Don't use custom HTTPS agent with axios-cookiejar-support
       const response = await axiosInstance({
         method: req.method,
         url: fullTargetUrl,
@@ -1298,14 +1299,8 @@ class WebsiteMirroringService {
         timeout: 30000, // Increased timeout for better reliability
         decompress: true,
         jar: cookieJar,
-        withCredentials: true,
-        // Advanced anti-fingerprinting
-        httpsAgent: new (require('https').Agent)({
-          secureProtocol: 'TLSv1_2_method',
-          ciphers: 'ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384',
-          honorCipherOrder: true,
-          rejectUnauthorized: false // Allow self-signed certificates
-        })
+        withCredentials: true
+        // Removed custom HTTPS agent that was conflicting with axios-cookiejar-support
       });
       
       // Save cookies from response with advanced processing
