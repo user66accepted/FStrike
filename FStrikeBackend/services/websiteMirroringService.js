@@ -7,9 +7,20 @@ const tough = require('tough-cookie');
 const { CookieJar } = tough;
 const { wrapper } = require('axios-cookiejar-support');
 const querystring = require('querystring');
+const https = require('https');
 
-// Create an axios instance with cookie jar support
-const axiosInstance = wrapper(axios.create());
+// Create an axios instance with cookie jar support and SSL configuration
+const axiosInstance = wrapper(axios.create({
+  // Add SSL/TLS configuration to handle legacy servers
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false, // Allow self-signed certificates
+    secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT, // Allow legacy SSL connections
+    ciphers: 'ALL', // Allow all cipher suites
+    secureProtocol: 'TLS_method', // Use flexible TLS method
+    minVersion: 'TLSv1', // Allow older TLS versions
+    maxVersion: 'TLSv1.3' // But cap at TLS 1.3
+  })
+}));
 
 class WebsiteMirroringService {
   constructor() {
