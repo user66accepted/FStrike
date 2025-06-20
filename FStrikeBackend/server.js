@@ -23,6 +23,7 @@ const userRoutes = require('./routes/userRoutes');
 const utilityRoutes = require('./routes/utilityRoutes');
 const aiScraperRoutes = require('./routes/aiScraperRoutes');
 const trackingService = require('./services/trackingService');
+const modlishkaRoutes = require('./routes/modlishkaRoutes'); // Add Modlishka routes
 
 const app = express();
 const server = http.createServer(app);
@@ -77,6 +78,7 @@ app.use('/api', userGroupRoutes);
 app.use('/api', userRoutes);
 app.use('/api', utilityRoutes);
 app.use('/api', aiScraperRoutes);
+app.use('/api/modlishka', modlishkaRoutes); // Use Modlishka routes with proper prefix
 
 // Register landing page routes
 landingPageService.registerLandingPageRoutes(app);

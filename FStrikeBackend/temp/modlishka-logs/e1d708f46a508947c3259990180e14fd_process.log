@@ -1,0 +1,1 @@
+[2m[Fri Jun 20 07:16:48 2025][0m [97m[41m[1m !!! [0m Error unmarshalling JSON configuration (/home/farrukh-naveed/Desktop/code/FStrike/FStrikeBackend/temp/modlishka-configs/e1d708f46a508947c3259990180e14fd.json): json: cannot unmarshal object into Go struct field Options.jsRules of type string . Terminating.
