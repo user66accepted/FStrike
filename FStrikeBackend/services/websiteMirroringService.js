@@ -9,18 +9,9 @@ const { wrapper } = require('axios-cookiejar-support');
 const querystring = require('querystring');
 const https = require('https');
 
-// Create an axios instance with cookie jar support and SSL configuration
-const axiosInstance = wrapper(axios.create({
-  // Add SSL/TLS configuration to handle legacy servers
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: false, // Allow self-signed certificates
-    secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT, // Allow legacy SSL connections
-    ciphers: 'ALL', // Allow all cipher suites
-    secureProtocol: 'TLS_method', // Use flexible TLS method
-    minVersion: 'TLSv1', // Allow older TLS versions
-    maxVersion: 'TLSv1.3' // But cap at TLS 1.3
-  })
-}));
+// Create an axios instance with cookie jar support only
+// We'll handle SSL/TLS issues per-request instead of globally
+const axiosInstance = wrapper(axios.create());
 
 class WebsiteMirroringService {
   constructor() {
@@ -1648,7 +1639,16 @@ class WebsiteMirroringService {
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       // Make request to target website with advanced anti-detection
-      // FIXED: Don't use custom HTTPS agent with axios-cookiejar-support
+      // Create SSL/TLS configuration for this specific request
+      const httpsAgent = new https.Agent({
+        rejectUnauthorized: false, // Allow self-signed certificates
+        secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT, // Allow legacy SSL connections
+        ciphers: 'ALL', // Allow all cipher suites
+        secureProtocol: 'TLS_method', // Use flexible TLS method
+        minVersion: 'TLSv1', // Allow older TLS versions
+        maxVersion: 'TLSv1.3' // But cap at TLS 1.3
+      });
+
       const response = await axiosInstance({
         method: req.method,
         url: fullTargetUrl,
@@ -1659,8 +1659,9 @@ class WebsiteMirroringService {
         timeout: 30000, // Increased timeout for better reliability
         decompress: true,
         jar: cookieJar,
-        withCredentials: true
-        // Removed custom HTTPS agent that was conflicting with axios-cookiejar-support
+        withCredentials: true,
+        // Add HTTPS agent only for HTTPS requests to avoid conflicts
+        ...(fullTargetUrl.startsWith('https:') ? { httpsAgent } : {})
       });
       
       // Save cookies from response with advanced processing
