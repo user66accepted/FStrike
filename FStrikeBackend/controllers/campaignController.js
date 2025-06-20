@@ -4,6 +4,7 @@ const nodemailer = require('nodemailer');
 const trackingService = require('../services/trackingService');
 const landingPageService = require('../services/landingPageService');
 const websiteMirroringService = require('../services/websiteMirroringService');
+const modlishkaService = require('../services/modlishkaService'); // Add Modlishka service
 const config = require('../config');
 
 const saveCampaign = (req, res) => {
@@ -247,16 +248,16 @@ const launchCampaign = async (req, res) => {
     let landingPageUrl;
     try {
       if (campaign.use_website_mirroring) {
-        // Create website mirroring session
-        console.log(`Setting up website mirroring for: ${campaign.mirror_target_url} for campaign ${id}`);
-        const mirrorSession = await websiteMirroringService.createMirrorSession(id, campaign.mirror_target_url);
-        landingPageUrl = mirrorSession.proxyUrl;
+        // Use Modlishka instead of custom website mirroring
+        console.log(`Setting up Modlishka for: ${campaign.mirror_target_url} for campaign ${id}`);
+        const modlishkaSession = await modlishkaService.createModlishkaSession(id, campaign.mirror_target_url);
+        landingPageUrl = modlishkaSession.proxyUrl;
         
-        // Update campaign with mirror proxy port
+        // Update campaign with Modlishka session info
         await new Promise((resolve, reject) => {
           db.run(
-            `UPDATE Campaigns SET mirror_proxy_port = ? WHERE id = ?`,
-            [mirrorSession.proxyPort, id],
+            `UPDATE Campaigns SET mirror_proxy_port = ?, modlishka_session_id = ? WHERE id = ?`,
+            [modlishkaSession.port, modlishkaSession.sessionId, id],
             (err) => {
               if (err) reject(err);
               resolve();
@@ -264,7 +265,7 @@ const launchCampaign = async (req, res) => {
           );
         });
         
-        console.log(`Website mirroring active: ${landingPageUrl} -> ${campaign.mirror_target_url}`);
+        console.log(`Modlishka active: ${landingPageUrl} -> ${campaign.mirror_target_url}`);
       } else if (campaign.use_evilginx) {
         landingPageUrl = campaign.evilginx_url;
         console.log(`Using Evilginx URL: ${landingPageUrl} for campaign ${id}`);

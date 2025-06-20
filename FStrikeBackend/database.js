@@ -148,6 +148,7 @@ db.serialize(() => {
     CREATE TABLE IF NOT EXISTS Campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
+      modlishka_session_id TEXT,
       template_id INTEGER NOT NULL,
       landing_page_id INTEGER,
       url TEXT NOT NULL,
