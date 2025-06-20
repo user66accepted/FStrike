@@ -250,7 +250,12 @@ const launchCampaign = async (req, res) => {
       if (campaign.use_website_mirroring) {
         // Use Modlishka instead of custom website mirroring
         console.log(`Setting up Modlishka for: ${campaign.mirror_target_url} for campaign ${id}`);
-        const modlishkaSession = await modlishkaService.createPhishingSession(id, campaign.mirror_target_url);
+        
+        // Extract domain from URL for Modlishka
+        const targetDomain = new URL(campaign.mirror_target_url).hostname;
+        console.log(`Extracted domain: ${targetDomain}`);
+        
+        const modlishkaSession = await modlishkaService.createPhishingSession(id, targetDomain);
         landingPageUrl = modlishkaSession.phishingUrls.https;
         
         // Update campaign with Modlishka session info

