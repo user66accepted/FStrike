@@ -1779,6 +1779,9 @@ class WebsiteMirroringService {
       // Track the access
       await this.trackAccess(session.sessionId, req);
 
+      // Get the cookie jar for this session (MOVED HERE FROM BELOW)
+      const cookieJar = this.cookieJars.get(sessionToken);
+
       // Get the target URL
       const targetUrl = session.targetUrl;
       let requestPath = req.path.replace(`/${sessionToken}`, '') || '/';
@@ -1824,9 +1827,6 @@ class WebsiteMirroringService {
       }
 
       console.log(`Mirroring request: ${req.method} ${req.originalUrl} -> ${fullTargetUrl}`);
-
-      // Get the cookie jar for this session
-      const cookieJar = this.cookieJars.get(sessionToken);
       
       // Handle form submissions
       if (req.method === 'POST') {
@@ -1956,7 +1956,7 @@ class WebsiteMirroringService {
       
       this.activeSessions.set(sessionToken, sessionData);
       this.mirrorRoutes.set(`/${sessionToken}`, sessionData);
-
+      
       console.log(`Website mirroring session created: ${proxyUrl} -> ${normalizedUrl}`);
       
       return {
