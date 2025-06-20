@@ -8,10 +8,40 @@ const { CookieJar } = tough;
 const { wrapper } = require('axios-cookiejar-support');
 const querystring = require('querystring');
 const https = require('https');
+const tls = require('tls');
 
-// Create an axios instance with cookie jar support only
-// We'll handle SSL/TLS issues per-request instead of globally
-const axiosInstance = wrapper(axios.create());
+// Configure Node.js to allow legacy SSL connections globally
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+// Override the default TLS settings to allow legacy renegotiation
+const originalCreateSecureContext = tls.createSecureContext;
+tls.createSecureContext = function(options = {}) {
+  const context = originalCreateSecureContext.call(this, {
+    ...options,
+    secureOptions: (options.secureOptions || 0) | require('constants').SSL_OP_LEGACY_SERVER_CONNECT,
+    ciphers: options.ciphers || 'ALL:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
+    honorCipherOrder: false,
+    minVersion: 'TLSv1',
+    maxVersion: 'TLSv1.3'
+  });
+  return context;
+};
+
+// Create an axios instance with cookie jar support
+const axiosInstance = wrapper(axios.create({
+  timeout: 30000,
+  httpsAgent: new https.Agent({
+    rejectUnauthorized: false,
+    secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT,
+    ciphers: 'ALL:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
+    honorCipherOrder: false,
+    minVersion: 'TLSv1',
+    maxVersion: 'TLSv1.3',
+    checkServerIdentity: () => undefined, // Disable server identity checks
+    requestCert: false,
+    agent: false
+  })
+}));
 
 class WebsiteMirroringService {
   constructor() {
