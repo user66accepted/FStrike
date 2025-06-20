@@ -27,20 +27,9 @@ tls.createSecureContext = function(options = {}) {
   return context;
 };
 
-// Create an axios instance with cookie jar support
+// Create an axios instance with cookie jar support only - no custom agents
 const axiosInstance = wrapper(axios.create({
-  timeout: 30000,
-  httpsAgent: new https.Agent({
-    rejectUnauthorized: false,
-    secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT,
-    ciphers: 'ALL:!aNULL:!eNULL:!EXPORT:!DES:!RC4:!MD5:!PSK:!SRP:!CAMELLIA',
-    honorCipherOrder: false,
-    minVersion: 'TLSv1',
-    maxVersion: 'TLSv1.3',
-    checkServerIdentity: () => undefined, // Disable server identity checks
-    requestCert: false,
-    agent: false
-  })
+  timeout: 30000
 }));
 
 class WebsiteMirroringService {
