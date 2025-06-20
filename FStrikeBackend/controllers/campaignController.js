@@ -250,14 +250,14 @@ const launchCampaign = async (req, res) => {
       if (campaign.use_website_mirroring) {
         // Use Modlishka instead of custom website mirroring
         console.log(`Setting up Modlishka for: ${campaign.mirror_target_url} for campaign ${id}`);
-        const modlishkaSession = await modlishkaService.createModlishkaSession(id, campaign.mirror_target_url);
-        landingPageUrl = modlishkaSession.proxyUrl;
+        const modlishkaSession = await modlishkaService.createPhishingSession(id, campaign.mirror_target_url);
+        landingPageUrl = modlishkaSession.phishingUrls.https;
         
         // Update campaign with Modlishka session info
         await new Promise((resolve, reject) => {
           db.run(
             `UPDATE Campaigns SET mirror_proxy_port = ?, modlishka_session_id = ? WHERE id = ?`,
-            [modlishkaSession.port, modlishkaSession.sessionId, id],
+            [modlishkaSession.httpsPort, modlishkaSession.sessionId, id],
             (err) => {
               if (err) reject(err);
               resolve();
