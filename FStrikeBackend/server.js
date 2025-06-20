@@ -161,14 +161,7 @@ app.use('/:sessionToken', async (req, res, next) => {
       return await websiteMirroringService.handleMirrorRequest(sessionToken, req, res);
     } catch (error) {
       console.error(`Error in mirroring handler: ${error.message}`);
-      
-      // Create a fallback session object for error handling
-      const fallbackSession = {
-        sessionToken: sessionToken,
-        targetUrl: 'https://example.com' // fallback URL
-      };
-      
-      return res.status(500).send(`
+            return res.status(500).send(`
         <html>
           <head>
             <title>Proxy Error</title>

