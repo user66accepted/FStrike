@@ -5,7 +5,7 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration - force HTTP
-  trackingUrl: 'https://ananthtech.ddns.net',
+  trackingUrl: 'http://localhost:5001',
   
   // Ngrok configuration
   useNgrok: false, // Disable ngrok since we're using VPS

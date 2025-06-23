@@ -383,7 +383,7 @@ const launchCampaign = async (req, res) => {
           const webBug = `
             <!-- Mail tracking -->
             <div style="line-height:0;font-size:0;height:0">
-              <img src="https://ananthtech.ddns.net/tracker/${trackingId}.png?t=${Date.now()}" 
+              <img src="${config.trackingUrl}/tracker/${trackingId}.png?t=${Date.now()}" 
                    width="1" 
                    height="1" 
                    border="0"
