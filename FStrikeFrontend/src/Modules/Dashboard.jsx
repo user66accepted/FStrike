@@ -252,7 +252,7 @@ const Dashboard = () => {
               <>
                 <CampaignStatistics stats={campaignStats} />
 
-                <CookiesListener />
+                <CookiesListener campaignId={selectedCampaign.id} />
                 
                 {/* Login Attempts Section */}
                 <LoginAttemptsList campaignId={selectedCampaign.id} />

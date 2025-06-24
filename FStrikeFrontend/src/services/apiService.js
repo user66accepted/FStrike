@@ -125,3 +125,13 @@ export const downloadCookies = async (loginAttemptId) => {
     throw error;
   }
 };
+
+export const getCapturedCookies = async (campaignId) => {
+  try {
+    const response = await httpClient.get(`/GetCapturedCookies/${campaignId}`);
+    return response;
+  } catch (error) {
+    console.error('Error fetching captured cookies:', error);
+    throw error;
+  }
+};

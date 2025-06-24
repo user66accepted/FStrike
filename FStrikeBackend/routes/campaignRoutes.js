@@ -12,6 +12,7 @@ router.get('/GetCampaignLogs/:id', campaignController.getCampaignLogs);
 router.get('/GetFormSubmissions/:id', campaignController.getFormSubmissions);
 router.get('/GetLoginAttempts/:id', campaignController.getLoginAttempts);
 router.get('/DownloadCookies/:id', campaignController.downloadCookies);
+router.get('/GetCapturedCookies/:id', campaignController.getCapturedCookies);
 
 // Website mirroring routes
 router.get('/GetMirrorSession/:campaignId', campaignController.getMirrorSession);

