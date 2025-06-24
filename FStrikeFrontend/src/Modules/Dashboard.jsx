@@ -18,6 +18,7 @@ import CampaignStatistics from "../components/Charts/CampaignStatistics";
 import FormDataList from "../components/FormSubmissions/FormDataList";
 import LoginAttemptsList from "../components/LoginAttempts/LoginAttemptsList";
 import RecentCampaigns from "./Campaigns/RecentCampaigns";
+import CookiesListener from "../components/CookieListener";
 
 // Register Chart.js components and plugins
 ChartJS.register(
@@ -250,12 +251,11 @@ const Dashboard = () => {
             {campaignStats ? (
               <>
                 <CampaignStatistics stats={campaignStats} />
+
+                <CookiesListener />
                 
                 {/* Login Attempts Section */}
                 <LoginAttemptsList campaignId={selectedCampaign.id} />
-                
-                {/* Form Submissions Section */}
-                <FormDataList campaignId={selectedCampaign.id} />
               </>
             ) : (
               <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
