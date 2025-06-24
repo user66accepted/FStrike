@@ -1501,13 +1501,46 @@ class WebsiteMirroringService {
     const [nameValuePair] = cookieParts;
     const [name, value] = nameValuePair.split('=');
     
-    const details = {
+    // Extract other cookie attributes
+    const domain = cookieParts.find(part => part.trim().toLowerCase().startsWith('domain='));
+    const path = cookieParts.find(part => part.trim().toLowerCase().startsWith('path='));
+    const expires = cookieParts.find(part => part.trim().toLowerCase().startsWith('expires='));
+    const maxAge = cookieParts.find(part => part.trim().toLowerCase().startsWith('max-age='));
+    const secure = cookieParts.some(part => part.trim().toLowerCase() === 'secure');
+    const httpOnly = cookieParts.some(part => part.trim().toLowerCase() === 'httponly');
+    const sameSite = cookieParts.find(part => part.trim().toLowerCase().startsWith('samesite='));
+    
+    // Convert expires or max-age to expirationDate (in seconds since epoch)
+    let expirationDate = null;
+    if (expires) {
+      try {
+        expirationDate = Math.floor(new Date(expires.split('=')[1]).getTime() / 1000);
+      } catch (e) {
+        // Ignore invalid date format
+      }
+    } else if (maxAge) {
+      try {
+        const seconds = parseInt(maxAge.split('=')[1].trim(), 10);
+        expirationDate = Math.floor(Date.now() / 1000) + seconds;
+      } catch (e) {
+        // Ignore invalid format
+      }
+    }
+    
+    // Return cookie in standard format expected by the frontend
+    return {
       name: name && decodeURIComponent(name.trim()),
       value: value && decodeURIComponent(value.trim()),
+      domain: domain ? domain.split('=')[1].trim() : null,
+      path: path ? path.split('=')[1].trim() : '/',
+      expirationDate: expirationDate,
+      secure: secure,
+      httpOnly: httpOnly,
+      sameSite: sameSite ? sameSite.split('=')[1].trim() : null,
+      hostOnly: !domain,
+      session: !expirationDate,
       original: cookieStr
     };
-    
-    return details;
   }
 
   /**
