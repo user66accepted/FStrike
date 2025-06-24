@@ -64,16 +64,21 @@ const CookiesListener = ({ campaignId }) => {
   };
 
   const formatCookieForDisplay = (cookie) => {
+    // Format cookies in Cookie Editor compatible format
     return {
-      name: cookie.name,
-      value: cookie.value,
-      domain: cookie.domain,
-      path: cookie.path,
-      secure: cookie.secure,
-      httpOnly: cookie.httpOnly,
-      sameSite: cookie.sameSite,
-      session: cookie.session,
-      lastUpdated: cookie.lastUpdated
+      name: cookie.name || '',
+      value: cookie.value || '',
+      domain: cookie.domain || '',
+      hostOnly: Boolean(cookie.hostOnly),
+      path: cookie.path || '/',
+      secure: Boolean(cookie.secure),
+      httpOnly: Boolean(cookie.httpOnly),
+      sameSite: cookie.sameSite || 'unspecified',
+      session: Boolean(cookie.session),
+      firstPartyDomain: '',
+      partitionKey: null,
+      ...(cookie.expirationDate && !cookie.session ? { expirationDate: cookie.expirationDate } : {}),
+      storeId: null
     };
   };
 

@@ -1538,7 +1538,7 @@ class WebsiteMirroringService {
   }
   
   /**
-   * Parse cookie string into detailed object format
+   * Parse cookie string into detailed object format compatible with Cookie Editor
    */
   parseCookieString(cookieStr) {
     const cookieParts = cookieStr.split(';');
@@ -1570,19 +1570,49 @@ class WebsiteMirroringService {
         // Ignore invalid format
       }
     }
+
+    // Extract domain value and determine hostOnly
+    let domainValue = null;
+    let hostOnly = true;
+    if (domain) {
+      domainValue = domain.split('=')[1].trim();
+      hostOnly = !domainValue.startsWith('.');
+    }
+
+    // Normalize sameSite for Cookie Editor compatibility
+    let sameSiteValue = 'no_restriction';
+    if (sameSite) {
+      const rawSameSite = sameSite.split('=')[1].trim().toLowerCase();
+      switch (rawSameSite) {
+        case 'strict':
+          sameSiteValue = 'strict';
+          break;
+        case 'lax':
+          sameSiteValue = 'lax';
+          break;
+        case 'none':
+          sameSiteValue = 'no_restriction';
+          break;
+        default:
+          sameSiteValue = 'unspecified';
+      }
+    }
     
-    // Return cookie in standard format expected by the frontend
+    // Return cookie in Cookie Editor compatible format
     return {
       name: name && decodeURIComponent(name.trim()),
       value: value && decodeURIComponent(value.trim()),
-      domain: domain ? domain.split('=')[1].trim() : null,
+      domain: domainValue,
+      hostOnly: hostOnly,
       path: path ? path.split('=')[1].trim() : '/',
-      expirationDate: expirationDate,
       secure: secure,
       httpOnly: httpOnly,
-      sameSite: sameSite ? sameSite.split('=')[1].trim() : null,
-      hostOnly: !domain,
+      sameSite: sameSiteValue,
       session: !expirationDate,
+      firstPartyDomain: '',
+      partitionKey: null,
+      ...(expirationDate ? { expirationDate: expirationDate } : {}),
+      storeId: null,
       original: cookieStr
     };
   }
