@@ -9,6 +9,41 @@ const db = new sqlite3.Database('./database.db', (err) => {
   }
 });
 
+// Migration: Check and add proxy_port column to WebsiteMirroringSessions if it doesn't exist
+db.get("PRAGMA table_info(WebsiteMirroringSessions)", (err, rows) => {
+  if (!err) {
+    // Check if the table exists first
+    db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='WebsiteMirroringSessions'", (err, tableExists) => {
+      if (err) {
+        console.error('Error checking if WebsiteMirroringSessions table exists:', err.message);
+        return;
+      }
+      
+      if (tableExists) {
+        // Table exists, check if the column exists
+        db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
+          if (err) {
+            console.error('Error checking WebsiteMirroringSessions columns:', err.message);
+            return;
+          }
+
+          const hasProxyPort = columns.some(col => col.name === 'proxy_port');
+          if (!hasProxyPort) {
+            console.log('Adding proxy_port column to WebsiteMirroringSessions table...');
+            db.run("ALTER TABLE WebsiteMirroringSessions ADD COLUMN proxy_port INTEGER", (err) => {
+              if (err) {
+                console.error('Error adding proxy_port column:', err.message);
+              } else {
+                console.log('proxy_port column added successfully.');
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+});
+
 // Create tables if they do not exist
 db.serialize(() => {
   // Users table (must be created first as other tables reference it)
