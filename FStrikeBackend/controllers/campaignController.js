@@ -1047,12 +1047,61 @@ const downloadCookies = async (req, res) => {
       
       return res.send(cookieFileContent);
     } else {
+      // Format cookies for Cookie Editor extension compatibility
+      const formattedCookies = cookies.map(cookie => {
+        // Normalize sameSite values for Cookie Editor extension
+        let sameSite = 'unspecified';
+        if (cookie.sameSite) {
+          const normalizedSameSite = cookie.sameSite.toLowerCase();
+          if (['lax', 'strict', 'none'].includes(normalizedSameSite)) {
+            sameSite = normalizedSameSite === 'none' ? 'no_restriction' : normalizedSameSite;
+          }
+        }
+
+        // Convert expirationDate to proper format if it exists
+        let expirationDate = cookie.expirationDate;
+        if (expirationDate && typeof expirationDate === 'number') {
+          // Cookie Editor expects epoch time in seconds, ensure it's a valid number
+          if (expirationDate < 1000000000) {
+            // If it looks like it might be in milliseconds, convert
+            expirationDate = Math.floor(expirationDate);
+          }
+        } else if (expirationDate && typeof expirationDate === 'string') {
+          // Try to parse string dates
+          try {
+            expirationDate = Math.floor(new Date(expirationDate).getTime() / 1000);
+          } catch (e) {
+            expirationDate = undefined;
+          }
+        }
+
+        // Ensure domain starts with a dot for domain cookies or doesn't for host-only
+        let domain = cookie.domain || '';
+        if (!cookie.hostOnly && domain && !domain.startsWith('.')) {
+          domain = '.' + domain;
+        }
+
+        return {
+          name: cookie.name || '',
+          value: cookie.value || '',
+          domain: domain,
+          path: cookie.path || '/',
+          secure: Boolean(cookie.secure),
+          httpOnly: Boolean(cookie.httpOnly),
+          sameSite: sameSite,
+          hostOnly: Boolean(cookie.hostOnly),
+          session: Boolean(cookie.session),
+          ...(expirationDate && !cookie.session ? { expirationDate: expirationDate } : {}),
+          storeId: cookie.storeId || '0'
+        };
+      });
+
       // Set response headers for JSON format
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename="cookies_${id}.json"`);
       
-      // Return the cookies as JSON array
-      return res.send(JSON.stringify(cookies, null, 2));
+      // Return the cookies as JSON array compatible with Cookie Editor
+      return res.send(JSON.stringify(formattedCookies, null, 2));
     }
   } catch (err) {
     console.error('Error downloading cookies:', err.message);
