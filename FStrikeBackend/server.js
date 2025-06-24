@@ -190,6 +190,9 @@ io.on('connection', (socket) => {
   });
 });
 
+// Pass the Socket.IO instance to services that need real-time updates
+websiteMirroringService.setSocketIO(io);
+
 app.get('/', (req, res) => {
   res.json({ status: 'Backend is running' });
 });

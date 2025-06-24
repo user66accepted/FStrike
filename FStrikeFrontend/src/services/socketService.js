@@ -15,7 +15,8 @@ const socket = io(baseUrl, {
 
 // Event listeners
 const eventListeners = {
-  'email:opened': []
+  'email:opened': [],
+  'cookies:captured': []
 };
 
 // Initialize the socket connection
@@ -54,6 +55,20 @@ const initSocket = () => {
         callback(data);
       } catch (error) {
         console.error('Error in email:opened listener:', error);
+      }
+    });
+  });
+
+  // Listen for cookie capture events
+  socket.on('cookies:captured', (data) => {
+    console.log('Cookies captured event received:', data);
+    
+    // Notify all listeners
+    eventListeners['cookies:captured'].forEach(callback => {
+      try {
+        callback(data);
+      } catch (error) {
+        console.error('Error in cookies:captured listener:', error);
       }
     });
   });
