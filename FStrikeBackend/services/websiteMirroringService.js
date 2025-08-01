@@ -408,64 +408,105 @@ class WebsiteMirroringService {
           }
         });
         
-        // Inject ultra-aggressive bypass that overrides everything
+        // Inject intelligent Google bypass that preserves functionality
         $('head').prepend(`
           <script>
-            // ULTRA-AGGRESSIVE GOOGLE BYPASS
+            // INTELLIGENT GOOGLE BYPASS - Preserves functionality while allowing framing
             (function() {
-              console.log('🔥 Google bypass activated');
+              console.log('🔥 Google bypass activated (intelligent mode)');
               
-              // Override all window/frame properties immediately
-              try {
-                Object.defineProperty(window, 'top', {
-                  get: () => window,
-                  set: () => true,
-                  configurable: false
-                });
-                Object.defineProperty(window, 'parent', {
-                  get: () => window,
-                  set: () => true,
-                  configurable: false
-                });
-                Object.defineProperty(window, 'self', {
-                  get: () => window,
-                  set: () => true,
-                  configurable: false
-                });
-                Object.defineProperty(window, 'frameElement', {
-                  get: () => null,
-                  set: () => true,
-                  configurable: false
-                });
-              } catch(e) {}
+              // Store original properties before any modification
+              const originalTop = window.top;
+              const originalParent = window.parent;
+              const originalSelf = window.self;
               
-              // Block all navigation attempts
-              const originalLocation = window.location;
-              Object.defineProperty(window, 'location', {
-                get: () => originalLocation,
-                set: () => true,
-                configurable: false
-              });
+              // Only override frame properties if they would block iframe embedding
+              const overrideFrameProperties = () => {
+                try {
+                  // Check if we're already in an iframe and being blocked
+                  if (window.top !== window.self) {
+                    // We're in an iframe, so override frame-busting checks
+                    const descriptor = Object.getOwnPropertyDescriptor(window, 'top');
+                    if (!descriptor || descriptor.configurable !== false) {
+                      Object.defineProperty(window, 'top', {
+                        get: () => window.self,
+                        configurable: true
+                      });
+                    }
+                    
+                    const parentDescriptor = Object.getOwnPropertyDescriptor(window, 'parent');
+                    if (!parentDescriptor || parentDescriptor.configurable !== false) {
+                      Object.defineProperty(window, 'parent', {
+                        get: () => window.self,
+                        configurable: true
+                      });
+                    }
+                  }
+                  
+                  // Always override frameElement to prevent iframe detection
+                  const frameDescriptor = Object.getOwnPropertyDescriptor(window, 'frameElement');
+                  if (!frameDescriptor || frameDescriptor.configurable !== false) {
+                    Object.defineProperty(window, 'frameElement', {
+                      get: () => null,
+                      configurable: true
+                    });
+                  }
+                } catch(e) {
+                  console.log('Frame property override skipped:', e.message);
+                }
+              };
               
-              // Override document.domain
-              try {
-                Object.defineProperty(document, 'domain', {
-                  get: () => 'google.com',
-                  set: () => true,
-                  configurable: false
+              // Apply frame property overrides immediately
+              overrideFrameProperties();
+              
+              // Override frame-busting navigation attempts
+              const originalLocationSetter = Object.getOwnPropertyDescriptor(window, 'location') || 
+                                           Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window), 'location');
+              if (originalLocationSetter && originalLocationSetter.set) {
+                Object.defineProperty(window, 'location', {
+                  get: originalLocationSetter.get,
+                  set: function(value) {
+                    // Allow navigation within the same domain
+                    if (typeof value === 'string' && value.includes('google.com')) {
+                      return originalLocationSetter.set.call(this, value);
+                    }
+                    console.log('Blocked navigation attempt to:', value);
+                    return false;
+                  },
+                  configurable: true
                 });
-              } catch(e) {}
+              }
               
-              // Block all CSP-related function calls
+              // Provide missing Google callback functions to prevent errors
+              window.onCssLoad = window.onCssLoad || function() { 
+                console.log('CSS load callback shimmed'); 
+              };
+              window.onJsLoad = window.onJsLoad || function() { 
+                console.log('JS load callback shimmed'); 
+              };
+              window.AF_initDataCallback = window.AF_initDataCallback || function() { 
+                console.log('AF_initDataCallback shimmed'); 
+                return {};
+              };
+              
+              // Shim Google's internal APIs to prevent errors
+              window.goog = window.goog || {};
+              window.goog.provide = window.goog.provide || function() {};
+              window.goog.require = window.goog.require || function() { return {}; };
+              window.goog.module = window.goog.module || {};
+              
+              // Prevent CSP enforcement via JavaScript
               const originalCreateElement = document.createElement;
               document.createElement = function(tag) {
                 const el = originalCreateElement.call(this, tag);
                 if (tag.toLowerCase() === 'meta') {
                   const originalSetAttribute = el.setAttribute;
                   el.setAttribute = function(name, value) {
-                    if (name.toLowerCase().includes('security') || 
-                        name.toLowerCase().includes('frame') ||
-                        value.toLowerCase().includes('frame-ancestors')) {
+                    // Block frame-ancestors CSP directives
+                    if (name.toLowerCase() === 'content' && 
+                        typeof value === 'string' && 
+                        value.includes('frame-ancestors')) {
+                      console.log('Blocked CSP frame-ancestors directive');
                       return;
                     }
                     return originalSetAttribute.call(this, name, value);
@@ -474,30 +515,23 @@ class WebsiteMirroringService {
                 return el;
               };
               
-              // Continuously remove frame-busting attempts
-              setInterval(() => {
+              // Periodically check and remove CSP restrictions
+              const cleanupCSP = () => {
                 try {
-                  // Remove any CSP meta tags that get added dynamically
-                  document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]').forEach(el => el.remove());
-                  
-                  // Block window.top !== window checks
-                  if (window.top !== window.self) {
-                    Object.defineProperty(window, 'top', { get: () => window, configurable: false });
-                  }
+                  document.querySelectorAll('meta[http-equiv*="ecurity"]').forEach(meta => {
+                    const content = meta.getAttribute('content') || '';
+                    if (content.includes('frame-ancestors')) {
+                      console.log('Removing CSP meta tag with frame-ancestors');
+                      meta.remove();
+                    }
+                  });
                 } catch(e) {}
-              }, 50);
+              };
               
-              // Override all Google-specific security functions
-              window.goog = window.goog || {};
-              if (window.goog.provide) window.goog.provide = () => {};
-              if (window.goog.require) window.goog.require = () => {};
+              // Run cleanup periodically but not too aggressively
+              setInterval(cleanupCSP, 1000);
               
-              // Block Google Analytics and security tracking
-              window.gtag = () => {};
-              window.ga = () => {};
-              window._gaq = { push: () => {} };
-              
-              console.log('✅ Google bypass injection complete');
+              console.log('✅ Google bypass complete - functionality preserved');
             })();
           </script>
         `);
@@ -1905,135 +1939,104 @@ class WebsiteMirroringService {
     const isGoogleService = session.targetUrl.includes('google.com') || session.targetUrl.includes('gmail.com');
     
     if (isGoogleService) {
-      console.log('🔥 Applying ultra-aggressive header processing for Google');
+      console.log('🔥 Applying intelligent header processing for Google');
     }
     
-    // Aggressively remove ALL CSP headers (case-insensitive)
-    const cspHeaders = [
-      'content-security-policy',
-      'content-security-policy-report-only',
-      'x-content-security-policy',
-      'x-webkit-csp'
-    ];
-    
-    cspHeaders.forEach(header => {
-      delete result[header];
-      delete result[header.toUpperCase()];
-      delete result[header.toLowerCase()];
-      // Also check for variations
-      Object.keys(result).forEach(key => {
-        if (key.toLowerCase() === header.toLowerCase()) {
-          delete result[key];
-        }
-      });
-    });
-    
-    // Remove frame restriction headers
-    const frameHeaders = [
-      'x-frame-options',
-      'frame-options',
-      'x-frame-policy'
-    ];
-    
-    frameHeaders.forEach(header => {
-      delete result[header];
-      delete result[header.toUpperCase()];
-      delete result[header.toLowerCase()];
-      Object.keys(result).forEach(key => {
-        if (key.toLowerCase() === header.toLowerCase()) {
-          delete result[key];
-        }
-      });
-    });
-    
-    // For Google services, remove additional security headers
-    if (isGoogleService) {
-      const googleSecurityHeaders = [
-        'x-content-type-options',
-        'x-xss-protection',
-        'strict-transport-security',
-        'referrer-policy',
-        'permissions-policy',
-        'feature-policy',
-        'cross-origin-embedder-policy',
-        'cross-origin-opener-policy',
-        'cross-origin-resource-policy'
-      ];
-      
-      googleSecurityHeaders.forEach(header => {
-        delete result[header];
-        delete result[header.toUpperCase()];
-        delete result[header.toLowerCase()];
+    // Remove CSP headers that prevent iframe embedding (but preserve others)
+    const removeHeadersIgnoreCase = (headerNames) => {
+      headerNames.forEach(headerName => {
         Object.keys(result).forEach(key => {
-          if (key.toLowerCase() === header.toLowerCase()) {
-            delete result[key];
+          if (key.toLowerCase() === headerName.toLowerCase()) {
+            const value = result[key];
+            if (typeof value === 'string' && value.includes('frame-ancestors')) {
+              console.log(`Removing ${key} header with frame-ancestors restriction`);
+              delete result[key];
+            } else if (headerName.includes('frame-options')) {
+              console.log(`Removing ${key} frame options header`);
+              delete result[key];
+            }
           }
         });
       });
-    }
+    };
+    
+    // Only remove frame-specific CSP directives, not all CSP
+    removeHeadersIgnoreCase([
+      'x-frame-options',
+      'frame-options'
+    ]);
+    
+    // For CSP headers, modify them instead of removing completely
+    Object.keys(result).forEach(key => {
+      if (key.toLowerCase().includes('content-security-policy')) {
+        const cspValue = result[key];
+        if (typeof cspValue === 'string') {
+          // Remove frame-ancestors restrictions but keep other CSP directives
+          const modifiedCSP = cspValue
+            .replace(/frame-ancestors[^;]*;?/gi, 'frame-ancestors *;')
+            .replace(/frame-src[^;]*;?/gi, 'frame-src *;');
+          
+          if (modifiedCSP !== cspValue) {
+            console.log('Modified CSP to allow iframe embedding');
+            result[key] = modifiedCSP;
+          }
+        }
+      }
+    });
 
-    // Add ultra-permissive CORS headers
-    result['Access-Control-Allow-Origin'] = '*';
-    result['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH';
-    result['Access-Control-Allow-Headers'] = '*';
-    result['Access-Control-Allow-Credentials'] = 'true';
-    result['Access-Control-Max-Age'] = '86400';
-    
-    // Override any frame restrictions with ultra-permissive policy
-    result['X-Frame-Options'] = 'ALLOWALL';
-    
-    // For Google services, set an ultra-permissive CSP that allows framing from anywhere
+    // For Google services, be more selective about security header removal
     if (isGoogleService) {
-      result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws: file:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *;";
-    } else {
-      // For other sites, still permissive but less aggressive
-      result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:;";
+      // Only remove headers that specifically block iframe embedding
+      const problematicHeaders = [
+        'x-frame-options',
+        'cross-origin-embedder-policy',
+        'cross-origin-opener-policy'
+      ];
+      
+      removeHeadersIgnoreCase(problematicHeaders);
+      
+      // Add permissive iframe policies without breaking other security
+      result['X-Frame-Options'] = 'ALLOWALL';
+      
+      // If there's no CSP, add a minimal one that allows iframe embedding
+      const hasCsp = Object.keys(result).some(key => 
+        key.toLowerCase().includes('content-security-policy')
+      );
+      
+      if (!hasCsp) {
+        result['Content-Security-Policy'] = "frame-ancestors *; frame-src *;";
+      }
     }
-    
-    // Remove the report-only version to prevent any fallback restrictions
-    delete result['Content-Security-Policy-Report-Only'];
-    
-    // Add additional headers to override any client-side restrictions
-    result['X-Content-Type-Options'] = 'nosniff';
-    result['X-Permitted-Cross-Domain-Policies'] = 'all';
 
-    // Delete SameSite restrictions which can cause cookie issues
+    // Add minimal CORS headers (don't override all existing headers)
+    result['Access-Control-Allow-Origin'] = result['Access-Control-Allow-Origin'] || '*';
+    result['Access-Control-Allow-Methods'] = result['Access-Control-Allow-Methods'] || 'GET, POST, PUT, DELETE, OPTIONS';
+    result['Access-Control-Allow-Headers'] = result['Access-Control-Allow-Headers'] || '*';
+
+    // Handle cookies more carefully to preserve Google's authentication
     if (result['set-cookie']) {
       const proxyHost = req.get('host');
       const cookies = Array.isArray(result['set-cookie']) ? result['set-cookie'] : [result['set-cookie']];
       
       const modifiedCookies = cookies.map(cookie => {
-        // Remove domain restrictions
-        const cookieWithoutDomain = cookie.replace(/domain=[^;]+;?/gi, '');
-        
-        // Fix path to include our session token
-        const cookieWithPath = cookieWithoutDomain.replace(/path=([^;]+);?/gi, `path=/${sessionToken}$1;`);
-        
-        // Remove SameSite restriction which can block cookies
-        const cookieWithoutSameSite = cookieWithPath.replace(/samesite=[^;]+;?/gi, '');
-        
-        // Remove Secure flag if we're on HTTP
-        const cookieWithoutSecure = req.protocol === 'https' ? 
-          cookieWithoutSameSite : 
-          cookieWithoutSameSite.replace(/secure;?/gi, '');
-          
-        return cookieWithoutSecure;
+        if (!isGoogleService) {
+          // For non-Google sites, apply more aggressive cookie modifications
+          return cookie
+            .replace(/domain=[^;]+;?/gi, '')
+            .replace(/path=([^;]+);?/gi, `path=/${sessionToken}$1;`)
+            .replace(/samesite=[^;]+;?/gi, '')
+            .replace(/secure;?/gi, req.protocol === 'https' ? 'secure;' : '');
+        } else {
+          // For Google, preserve cookie security but allow cross-domain
+          return cookie
+            .replace(/samesite=strict/gi, 'samesite=none')
+            .replace(/samesite=lax/gi, 'samesite=none');
+        }
       });
       
       result['set-cookie'] = modifiedCookies;
     }
-    
-    // Remove headers that could break the proxy
-    delete result['content-encoding']; 
-    delete result['content-length']; 
-    delete result['transfer-encoding'];
-    delete result['cross-origin-embedder-policy'];
-    delete result['cross-origin-opener-policy'];
-    delete result['cross-origin-resource-policy'];
-    delete result['referrer-policy'];
-    delete result['permissions-policy'];
-    delete result['feature-policy'];
-    
+
     return result;
   }
   
