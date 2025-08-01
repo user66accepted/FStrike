@@ -377,21 +377,67 @@ class WebsiteMirroringService {
       $('meta[name="Content-Security-Policy"]').remove();
       $('meta[name="content-security-policy"]').remove();
       
-      // Remove any script tags that might set CSP dynamically
+      // Remove any script tags that might set CSP dynamically or enforce frame restrictions
       $('script').each((i, elem) => {
         const scriptContent = $(elem).html();
         if (scriptContent && (
           scriptContent.includes('Content-Security-Policy') ||
           scriptContent.includes('frame-ancestors') ||
-          scriptContent.includes('X-Frame-Options')
+          scriptContent.includes('X-Frame-Options') ||
+          scriptContent.includes('parent !== window') ||
+          scriptContent.includes('top !== self') ||
+          scriptContent.includes('framebusting') ||
+          scriptContent.includes('clickjacking')
         )) {
+          console.log('Removing CSP/frame-blocking script');
           $(elem).remove();
         }
       });
       
-      // Add completely permissive CSP that allows everything
+      // Add ultra-permissive CSP that allows everything including framing
       $('head').prepend(`
-        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
+        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:; object-src * data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *; navigate-to *;">
+      `);
+      
+      // Inject script to continuously override any CSP that might be set later
+      $('head').prepend(`
+        <script>
+          // Continuously override CSP and frame restrictions
+          (function() {
+            // Override any attempts to set CSP via JavaScript
+            const originalSetAttribute = Element.prototype.setAttribute;
+            Element.prototype.setAttribute = function(name, value) {
+              if (name.toLowerCase() === 'content' && 
+                  this.getAttribute && 
+                  (this.getAttribute('http-equiv') || '').toLowerCase().includes('content-security-policy')) {
+                // Block CSP setting attempts
+                console.log('Blocked CSP setting attempt');
+                return;
+              }
+              return originalSetAttribute.call(this, name, value);
+            };
+            
+            // Override frame-busting attempts
+            if (window.top !== window.self) {
+              try {
+                window.top.location = window.self.location;
+              } catch (e) {
+                // If we can't access top, just ignore frame restrictions
+              }
+            }
+            
+            // Block common frame-busting techniques
+            Object.defineProperty(window, 'top', {
+              get: function() { return window; },
+              set: function() { return window; }
+            });
+            
+            Object.defineProperty(window, 'parent', {
+              get: function() { return window; },
+              set: function() { return window; }
+            });
+          })();
+        </script>
       `);
 
       // Preserve module loading systems - inject our scripts carefully
@@ -875,9 +921,29 @@ class WebsiteMirroringService {
         return res.status(400).json({ error: 'No target URL provided' });
       }
 
+      // Handle relative URLs by converting them to absolute URLs
+      let absoluteTargetUrl;
+      try {
+        if (targetUrl.startsWith('/')) {
+          // Relative URL - use the session's target URL as base
+          const baseUrl = new URL(session.targetUrl);
+          absoluteTargetUrl = `${baseUrl.protocol}//${baseUrl.host}${targetUrl}`;
+        } else if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+          // Already absolute URL
+          absoluteTargetUrl = targetUrl;
+        } else {
+          // Relative URL without leading slash
+          const baseUrl = new URL(session.targetUrl);
+          absoluteTargetUrl = `${baseUrl.protocol}//${baseUrl.host}/${targetUrl}`;
+        }
+      } catch (urlError) {
+        console.error('Error processing target URL:', urlError);
+        return res.status(400).json({ error: 'Invalid target URL format' });
+      }
+
       // Validate that this is a legitimate cross-origin request for the mirrored site
       const sessionDomain = new URL(session.targetUrl).hostname;
-      const requestDomain = new URL(targetUrl).hostname;
+      const requestDomain = new URL(absoluteTargetUrl).hostname;
       
       // Allow requests to same domain or Google services (expanded list)
       const allowedDomains = [
@@ -896,10 +962,10 @@ class WebsiteMirroringService {
         return res.status(403).json({ error: 'Cross-origin request not allowed' });
       }
 
-      console.log(`🌐 Proxying cross-origin request: ${targetUrl}`);
+      console.log(`🌐 Proxying cross-origin request: ${absoluteTargetUrl}`);
 
       const cookieJar = this.cookieJars.get(sessionToken);
-      const headers = this.generateRealistBrowserHeaders(req, targetUrl, sessionToken);
+      const headers = this.generateRealistBrowserHeaders(req, absoluteTargetUrl, sessionToken);
       
       // Copy important headers from the original request
       const importantHeaders = [
@@ -914,7 +980,7 @@ class WebsiteMirroringService {
       });
       
       // Build cookie header for the target domain
-      const cookieHeader = this.buildCookieHeader(req, cookieJar, targetUrl);
+      const cookieHeader = this.buildCookieHeader(req, cookieJar, absoluteTargetUrl);
       if (cookieHeader) {
         headers['Cookie'] = cookieHeader;
       }
@@ -933,7 +999,7 @@ class WebsiteMirroringService {
       // Make the proxied request
       const response = await axiosInstance({
         method: req.method,
-        url: targetUrl,
+        url: absoluteTargetUrl,
         data: req.body,
         headers,
         responseType: 'arraybuffer',
@@ -951,7 +1017,7 @@ class WebsiteMirroringService {
           : [response.headers['set-cookie']];
           
         cookies.forEach(cookie => {
-          this.storeCookieForLater(sessionToken, cookie, targetUrl);
+          this.storeCookieForLater(sessionToken, cookie, absoluteTargetUrl);
         });
         
         this.trackAllCookies(sessionToken, cookies);
@@ -1307,7 +1373,16 @@ class WebsiteMirroringService {
     
     // Override any frame restrictions with permissive policy
     result['X-Frame-Options'] = 'ALLOWALL';
-    result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';";
+    
+    // Completely remove any CSP and replace with ultra-permissive one
+    result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:; object-src * data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *; navigate-to *;";
+    
+    // Also set the report-only version to prevent any fallback restrictions
+    result['Content-Security-Policy-Report-Only'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:;";
+    
+    // Add additional headers to override any client-side restrictions
+    result['X-Content-Type-Options'] = 'nosniff';
+    result['X-Permitted-Cross-Domain-Policies'] = 'all';
 
     // Delete SameSite restrictions which can cause cookie issues
     if (result['set-cookie']) {
