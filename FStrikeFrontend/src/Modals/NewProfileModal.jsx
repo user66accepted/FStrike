@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { FaTimes, FaPlus, FaMailBulk } from "react-icons/fa";
+import { FaTimes, FaPlus, FaMailBulk, FaUser, FaServer, FaKey, FaEnvelope, FaLock } from "react-icons/fa";
+import config from "../config/apiConfig";
 
 export default function NewProfileModal({ profile, onClose }) {
   const [form, setForm] = useState({
@@ -80,8 +81,8 @@ export default function NewProfileModal({ profile, onClose }) {
 
     try {
       const url = profile
-        ? `http://147.93.87.182:5000/api/UpdateProfile/${profile.profileId}`
-        : "http://147.93.87.182:5000/api/SaveProfile";
+        ? `${config.API_BASE_URL}/UpdateProfile/${profile.profileId}`
+        : `${config.API_BASE_URL}/SaveProfile`;
 
       const method = profile ? "PUT" : "POST";
 
@@ -107,134 +108,201 @@ export default function NewProfileModal({ profile, onClose }) {
     <div
       id="modal-overlay"
       onClick={handleOverlayClick}
-      className="fixed inset-0 bg-opacity-30 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/50"
     >
-      <div className="bg-white rounded-lg w-full max-w-2xl p-6 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-600 hover:text-black cursor-pointer"
-        >
-          <FaTimes size={18} />
-        </button>
+      <div className="glass-card w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="relative p-6 border-b border-cyber-primary/20">
+          <div className="absolute inset-0 bg-gradient-to-r from-cyber-primary/10 to-cyber-secondary/10"></div>
+          <div className="relative z-10 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <FaLock className="text-cyber-primary text-2xl" />
+              <h2 className="text-2xl font-bold text-cyber-primary">
+                {profile ? "Edit Sending Profile" : "Create Sending Profile"}
+              </h2>
+            </div>
+            <button 
+              onClick={onClose}
+              className="glass-button p-2 rounded-lg text-cyber-muted hover:text-cyber-primary transition-all duration-300"
+            >
+              <FaTimes size={20} />
+            </button>
+          </div>
+          <p className="text-cyber-muted text-sm mt-2 relative z-10">
+            Configure SMTP settings for secure email delivery in campaigns
+          </p>
+        </div>
 
-        <h2 className="text-2xl font-bold mb-4">
-          {profile ? "Edit Sending Profile" : "New Sending Profile"}
-        </h2>
-
-        <div className="space-y-4">
-          {/* Name */}
+        {/* Form Content */}
+        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Profile Name */}
           <div>
-            <label className="text-gray-600 font-bold text-sm">Name:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaUser />
+              <span>Profile Name</span>
+            </label>
             <input
               name="name"
               type="text"
-              placeholder="Profile name"
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              placeholder="Enter profile name (e.g., Corporate Email)"
+              className="glass-select w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
               value={form.name}
               onChange={handleInputChange}
             />
             {errors.name && (
-              <div className="text-red-500 text-sm">{errors.name}</div>
+              <div className="text-red-400 text-sm mt-1 flex items-center space-x-1">
+                <span>⚠️</span>
+                <span>{errors.name}</span>
+              </div>
             )}
           </div>
 
           {/* Interface Type */}
           <div>
-            <label className="text-gray-600 font-bold text-sm">
-              Interface Type:
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaServer />
+              <span>Interface Type</span>
             </label>
-            <input
-              type="text"
-              readOnly
-              value="SMTP"
-              className="w-full border border-gray-300 rounded px-3 py-2 bg-gray-100"
-            />
+            <div className="glass-card p-4">
+              <div className="flex items-center justify-between">
+                <span className="text-cyber-secondary font-medium">SMTP Protocol</span>
+                <span className="badge badge-success">Active</span>
+              </div>
+              <p className="text-cyber-muted text-xs mt-2">
+                Simple Mail Transfer Protocol for reliable email delivery
+              </p>
+            </div>
           </div>
 
-          {/* From */}
+          {/* SMTP From */}
           <div>
-            <label className="text-gray-600 font-bold text-sm">SMTP From:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaEnvelope />
+              <span>SMTP From Address</span>
+            </label>
             <input
               name="from"
               type="text"
-              placeholder="First Last <test@example.com>"
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              placeholder="John Doe <john.doe@company.com>"
+              className="glass-select w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
               value={form.from}
               onChange={handleInputChange}
             />
             {errors.from && (
-              <div className="text-red-500 text-sm">{errors.from}</div>
+              <div className="text-red-400 text-sm mt-1 flex items-center space-x-1">
+                <span>⚠️</span>
+                <span>{errors.from}</span>
+              </div>
             )}
+            <p className="text-cyber-muted text-xs mt-2">
+              Format: Display Name &lt;email@domain.com&gt;
+            </p>
           </div>
 
           {/* Host */}
           <div>
-            <label className="text-gray-600 font-bold text-sm">Host:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaServer />
+              <span>SMTP Host</span>
+            </label>
             <input
               name="host"
               type="text"
-              placeholder="smtp.example.com:25"
-              className="w-full border border-gray-300 rounded px-3 py-2"
+              placeholder="smtp.gmail.com:587"
+              className="glass-select w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
               value={form.host}
               onChange={handleInputChange}
             />
             {errors.host && (
-              <div className="text-red-500 text-sm">{errors.host}</div>
+              <div className="text-red-400 text-sm mt-1 flex items-center space-x-1">
+                <span>⚠️</span>
+                <span>{errors.host}</span>
+              </div>
             )}
+            <p className="text-cyber-muted text-xs mt-2">
+              Include port number (e.g., smtp.example.com:587 or smtp.example.com:25)
+            </p>
           </div>
 
-          {/* Username */}
-          <div>
-            <label className="text-gray-600 font-bold text-sm">Username:</label>
-            <input
-              name="username"
-              type="text"
-              placeholder="Username"
-              className="w-full border border-gray-300 rounded px-3 py-2"
-              value={form.username}
-              onChange={handleInputChange}
-            />
-            {errors.username && (
-              <div className="text-red-500 text-sm">{errors.username}</div>
-            )}
+          {/* Username & Password */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+                <FaUser />
+                <span>Username</span>
+              </label>
+              <input
+                name="username"
+                type="text"
+                placeholder="Enter SMTP username"
+                className="glass-select w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
+                value={form.username}
+                onChange={handleInputChange}
+              />
+              {errors.username && (
+                <div className="text-red-400 text-sm mt-1 flex items-center space-x-1">
+                  <span>⚠️</span>
+                  <span>{errors.username}</span>
+                </div>
+              )}
+            </div>
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+                <FaKey />
+                <span>Password</span>
+              </label>
+              <input
+                name="password"
+                type="password"
+                placeholder="Enter SMTP password"
+                className="glass-select w-full px-4 py-3 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
+                value={form.password}
+                onChange={handleInputChange}
+              />
+              {errors.password && (
+                <div className="text-red-400 text-sm mt-1 flex items-center space-x-1">
+                  <span>⚠️</span>
+                  <span>{errors.password}</span>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Password */}
-          <div>
-            <label className="text-gray-600 font-bold text-sm">Password:</label>
-            <input
-              name="password"
-              type="password"
-              placeholder="Password"
-              className="w-full border border-gray-300 rounded px-3 py-2"
-              value={form.password}
-              onChange={handleInputChange}
-            />
-            {errors.password && (
-              <div className="text-red-500 text-sm">{errors.password}</div>
-            )}
+          {/* Ignore Certificate Errors */}
+          <div className="glass-card p-4">
+            <label className="flex items-center justify-between cursor-pointer">
+              <div className="flex items-center space-x-3">
+                <FaLock className="text-cyber-secondary" />
+                <div>
+                  <span className="text-cyber-secondary font-medium">Ignore Certificate Errors</span>
+                  <p className="text-cyber-muted text-xs mt-1">
+                    Skip SSL certificate validation (use with caution)
+                  </p>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                name="ignoreCerts"
+                className="w-5 h-5 text-cyber-primary bg-transparent border-cyber-primary/50 rounded focus:ring-cyber-primary/50 focus:ring-2 transition-all duration-300"
+                checked={form.ignoreCerts}
+                onChange={handleInputChange}
+              />
+            </label>
           </div>
 
-          {/* Ignore Certs */}
-          <label className="inline-flex items-center space-x-2">
-            <input
-              type="checkbox"
-              name="ignoreCerts"
-              className="form-checkbox h-6 w-6"
-              checked={form.ignoreCerts}
-              onChange={handleInputChange}
-            />
-            <span>Ignore Certificate Errors</span>
-          </label>
-
-          {/* Headers */}
-          <div>
-            <h3 className="font-semibold mb-2">Email Headers:</h3>
-            <div className="flex space-x-2 mb-2">
+          {/* Email Headers */}
+          <div className="glass-card p-4">
+            <h3 className="text-cyber-secondary font-medium mb-4 flex items-center space-x-2">
+              <FaEnvelope />
+              <span>Custom Email Headers</span>
+            </h3>
+            
+            {/* Add Header Form */}
+            <div className="flex space-x-2 mb-4">
               <input
                 type="text"
-                placeholder="X-Custom-Header"
-                className="border border-gray-300 rounded px-3 py-2 flex-1"
+                placeholder="Header Name (e.g., X-Mailer)"
+                className="glass-select flex-1 px-3 py-2 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
                 value={customHeader.key}
                 onChange={(e) =>
                   setCustomHeader((ch) => ({ ...ch, key: e.target.value }))
@@ -242,8 +310,8 @@ export default function NewProfileModal({ profile, onClose }) {
               />
               <input
                 type="text"
-                placeholder="{{URL}}-gophish"
-                className="border border-gray-300 rounded px-3 py-2 flex-1"
+                placeholder="Header Value (e.g., {{URL}}-campaign)"
+                className="glass-select flex-1 px-3 py-2 rounded-lg focus:ring-2 focus:ring-cyber-primary/50 transition-all duration-300"
                 value={customHeader.value}
                 onChange={(e) =>
                   setCustomHeader((ch) => ({ ...ch, value: e.target.value }))
@@ -251,39 +319,49 @@ export default function NewProfileModal({ profile, onClose }) {
               />
               <button
                 onClick={addHeader}
-                className="flex items-center space-x-2 bg-red-500 hover:bg-red-700 text-white px-4 py-2 rounded cursor-pointer"
+                disabled={!customHeader.key || !customHeader.value}
+                className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FaPlus />
                 <span>Add</span>
               </button>
             </div>
-            <div className="border border-gray-300 rounded">
-              <table className="w-full text-left">
+
+            {/* Headers Table */}
+            <div className="data-table rounded-lg overflow-hidden">
+              <table className="w-full">
                 <thead>
-                  <tr className="border-b border-gray-300">
-                    <th className="px-4 py-2 w-8"></th>
-                    <th className="px-4 py-2">Header</th>
-                    <th className="px-4 py-2">Value</th>
+                  <tr className="border-b border-cyber-primary/20">
+                    <th className="p-3 text-left text-cyber-primary font-medium w-8">Action</th>
+                    <th className="p-3 text-left text-cyber-primary font-medium">Header Name</th>
+                    <th className="p-3 text-left text-cyber-primary font-medium">Header Value</th>
                   </tr>
                 </thead>
                 <tbody>
                   {headers.length === 0 ? (
                     <tr>
-                      <td colSpan="3" className="px-4 py-2 text-center text-gray-500">
-                        No data available in table
+                      <td colSpan="3" className="p-8 text-center text-cyber-muted italic">
+                        <div className="flex flex-col items-center space-y-2">
+                          <FaEnvelope className="text-cyber-primary/50 text-2xl" />
+                          <span>No custom headers configured</span>
+                          <span className="text-xs">Add headers to customize email metadata</span>
+                        </div>
                       </td>
                     </tr>
                   ) : (
                     headers.map((h, idx) => (
-                      <tr key={idx} className="border-b hover:bg-gray-50">
-                        <td
-                          className="px-4 py-2 text-red-500 cursor-pointer"
-                          onClick={() => deleteHeader(idx)}
-                        >
-                          <FaTimes />
+                      <tr key={idx} className="border-b border-cyber-primary/10 hover:bg-cyber-primary/5 transition-colors duration-200">
+                        <td className="p-3">
+                          <button
+                            onClick={() => deleteHeader(idx)}
+                            className="text-red-400 hover:text-red-300 transition-colors p-1 rounded"
+                            title="Remove header"
+                          >
+                            <FaTimes />
+                          </button>
                         </td>
-                        <td className="px-4 py-2">{h.key}</td>
-                        <td className="px-4 py-2">{h.value}</td>
+                        <td className="p-3 text-cyber-secondary font-medium">{h.key}</td>
+                        <td className="p-3 text-cyber-muted font-mono text-sm">{h.value}</td>
                       </tr>
                     ))
                   )}
@@ -291,27 +369,31 @@ export default function NewProfileModal({ profile, onClose }) {
               </table>
             </div>
           </div>
+        </div>
 
-          {/* Actions */}
-          <div className="flex justify-between mt-6">
-            <button className="flex items-center space-x-2 bg-teal-400 hover:bg-teal-600 text-white px-4 py-2 rounded font-semibold cursor-pointer">
-              <FaMailBulk />
-              <span>Send Test Email</span>
+        {/* Footer */}
+        <div className="flex justify-between border-t border-cyber-primary/20 px-6 py-4">
+          <button className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform">
+            <FaMailBulk />
+            <span>Send Test Email</span>
+          </button>
+          <div className="space-x-3">
+            <button
+              onClick={onClose}
+              className="glass-button px-6 py-2 rounded-lg text-cyber-muted hover:text-cyber-primary transition-colors duration-300"
+            >
+              Cancel
             </button>
-            <div className="space-x-2">
-              <button
-                onClick={onClose}
-                className="border border-gray-300 hover:bg-gray-200 px-4 py-2 rounded cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                className="bg-teal-400 hover:bg-teal-600 text-white px-4 py-2 rounded font-semibold cursor-pointer"
-              >
-                {profile ? "Update Profile" : "Save Profile"}
-              </button>
-            </div>
+            <button
+              onClick={handleSave}
+              className="glass-button px-6 py-2 rounded-lg hover:scale-105 transition-transform"
+              disabled={Object.keys(errors).length > 0}
+            >
+              <div className="flex items-center space-x-2">
+                <FaLock />
+                <span>{profile ? "Update Profile" : "Save Profile"}</span>
+              </div>
+            </button>
           </div>
         </div>
       </div>

@@ -1,1 +1,438 @@
 @import "tailwindcss";
+
+/* Professional Hacking Tool Theme */
+:root {
+  --cyber-primary: #00d4aa;
+  --cyber-secondary: #00a8ff;
+  --cyber-accent: #ff3838;
+  --cyber-warning: #ffa726;
+  --cyber-bg-primary: rgba(10, 15, 20, 0.95);
+  --cyber-bg-secondary: rgba(15, 25, 35, 0.85);
+  --cyber-text-primary: #e8f4f8;
+  --cyber-text-secondary: #8ea5b0;
+  --cyber-border: rgba(0, 212, 170, 0.3);
+}
+
+body {
+  background: linear-gradient(135deg, #0a0f14 0%, #1a252f 50%, #0d1b2a 100%);
+  color: var(--cyber-text-primary);
+  font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+  overflow-x: hidden;
+}
+
+/* Professional Glassmorphic Cards */
+.glass-card {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0.1) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  border-radius: 16px;
+  box-shadow: 
+    0 8px 32px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px rgba(0, 212, 170, 0.05);
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    var(--cyber-primary) 50%, 
+    transparent 100%);
+  opacity: 0.6;
+}
+
+.glass-card:hover {
+  border-color: rgba(0, 212, 170, 0.4);
+  box-shadow: 
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15),
+    0 0 0 1px rgba(0, 212, 170, 0.1),
+    0 0 30px rgba(0, 212, 170, 0.1);
+  transform: translateY(-2px);
+  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Professional Buttons */
+.glass-button {
+  background: linear-gradient(135deg, 
+    rgba(0, 212, 170, 0.2) 0%,
+    rgba(0, 168, 255, 0.1) 100%);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  color: var(--cyber-text-primary);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+}
+
+.glass-button::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent, 
+    rgba(0, 212, 170, 0.2), 
+    transparent);
+  transition: left 0.5s;
+}
+
+.glass-button:hover::before {
+  left: 100%;
+}
+
+.glass-button:hover {
+  border-color: rgba(0, 212, 170, 0.6);
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+  transform: translateY(-1px);
+}
+
+/* Professional Select Elements */
+.glass-select {
+  background: rgba(15, 25, 35, 0.8);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  color: var(--cyber-text-primary);
+  font-family: inherit;
+}
+
+.glass-select:focus {
+  outline: none;
+  border-color: var(--cyber-primary);
+  box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2);
+}
+
+/* Professional Text Styles */
+.text-cyber-primary {
+  color: var(--cyber-primary);
+  font-weight: 600;
+}
+
+.text-cyber-secondary {
+  color: var(--cyber-secondary);
+}
+
+.text-cyber-muted {
+  color: var(--cyber-text-secondary);
+  font-size: 0.875rem;
+}
+
+.text-cyber-accent {
+  color: var(--cyber-accent);
+}
+
+/* Professional Status Indicators */
+.status-indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  position: relative;
+}
+
+.status-indicator::after {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  opacity: 0.3;
+  animation: pulse-ring 2s infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(1); opacity: 0.3; }
+  50% { transform: scale(1.5); opacity: 0.1; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* Professional Loading Animation */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 2px solid rgba(0, 212, 170, 0.2);
+  border-top: 2px solid var(--cyber-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Subtle Grid Background */
+.grid-bg {
+  background-image: 
+    linear-gradient(rgba(0, 212, 170, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 212, 170, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+}
+
+/* Professional Toggle Switch */
+.toggle-switch {
+  position: relative;
+  width: 60px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 25px;
+  border: 1px solid rgba(0, 212, 170, 0.3);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.toggle-switch.active {
+  background: linear-gradient(135deg, var(--cyber-primary), var(--cyber-secondary));
+  box-shadow: 0 0 20px rgba(0, 212, 170, 0.3);
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch.active .toggle-slider {
+  transform: translateX(30px);
+}
+
+/* Data Table Styling */
+.data-table {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(0, 212, 170, 0.1);
+}
+
+.data-table th {
+  background: rgba(0, 212, 170, 0.1);
+  color: var(--cyber-primary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.75rem;
+  padding: 1rem;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+.data-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.1);
+  color: var(--cyber-text-secondary);
+}
+
+.data-table tr:hover {
+  background: rgba(0, 212, 170, 0.05);
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Chart Container */
+.chart-container {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(15px);
+  border-radius: 16px;
+  padding: 2rem;
+  border: 1px solid rgba(0, 212, 170, 0.15);
+}
+
+/* Badge Styling */
+.badge {
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.badge-success {
+  background: rgba(76, 175, 76, 0.2);
+  color: #4caf50;
+  border: 1px solid rgba(76, 175, 76, 0.3);
+}
+
+.badge-warning {
+  background: rgba(255, 167, 38, 0.2);
+  color: var(--cyber-warning);
+  border: 1px solid rgba(255, 167, 38, 0.3);
+}
+
+.badge-danger {
+  background: rgba(255, 56, 56, 0.2);
+  color: var(--cyber-accent);
+  border: 1px solid rgba(255, 56, 56, 0.3);
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 212, 170, 0.3);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 212, 170, 0.5);
+}
+
+/* Header Styling */
+.header-glass {
+  background: rgba(10, 15, 20, 0.8);
+  backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+/* Sidebar Styling */
+.sidebar-glass {
+  background: linear-gradient(180deg, 
+    rgba(10, 15, 20, 0.9) 0%,
+    rgba(15, 25, 35, 0.8) 100%);
+  backdrop-filter: blur(20px);
+  border-right: 1px solid rgba(0, 212, 170, 0.2);
+}
+
+/* Matrix Effect - More Subtle */
+.matrix-bg {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.03;
+}
+
+/* React Tabs Custom Styling */
+.react-tabs {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.react-tabs__tab-list {
+  border-bottom: 2px solid rgba(0, 212, 170, 0.2) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+}
+
+.react-tabs__tab {
+  display: inline-block !important;
+  border: none !important;
+  border-bottom: 2px solid transparent !important;
+  bottom: -1px !important;
+  position: relative !important;
+  list-style: none !important;
+  padding: 12px 24px !important;
+  cursor: pointer !important;
+  background: transparent !important;
+  color: var(--cyber-text-secondary) !important;
+  transition: all 0.3s ease !important;
+  font-weight: 500 !important;
+}
+
+.react-tabs__tab:hover {
+  color: var(--cyber-primary) !important;
+  background: transparent !important;
+}
+
+.react-tabs__tab--selected {
+  background: transparent !important;
+  color: var(--cyber-primary) !important;
+  border-bottom-color: var(--cyber-primary) !important;
+  box-shadow: none !important;
+}
+
+.react-tabs__tab:focus {
+  outline: none !important;
+  box-shadow: 0 0 0 2px rgba(0, 212, 170, 0.2) !important;
+}
+
+.react-tabs__tab:focus:after {
+  content: "" !important;
+  position: absolute !important;
+  height: 5px !important;
+  left: -4px !important;
+  right: -4px !important;
+  bottom: -5px !important;
+  background: transparent !important;
+}
+
+.react-tabs__tab-panel {
+  display: none !important;
+}
+
+.react-tabs__tab-panel--selected {
+  display: block !important;
+}
+
+/* Modal Styling */
+.cyber-modal .ant-modal-content {
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0.1) 100%) !important;
+  backdrop-filter: blur(20px) saturate(180%) !important;
+  border: 1px solid rgba(0, 212, 170, 0.2) !important;
+  border-radius: 16px !important;
+  color: var(--cyber-text-primary) !important;
+}
+
+.cyber-modal .ant-modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid rgba(0, 212, 170, 0.2) !important;
+  color: var(--cyber-primary) !important;
+}
+
+.cyber-modal .ant-modal-title {
+  color: var(--cyber-primary) !important;
+}
+
+.cyber-modal .ant-modal-close {
+  color: var(--cyber-text-secondary) !important;
+}
+
+.cyber-modal .ant-modal-close:hover {
+  color: var(--cyber-accent) !important;
+}
+
+.cyber-modal .ant-modal-body {
+  color: var(--cyber-text-primary) !important;
+}
+
+.cyber-modal .ant-modal-footer {
+  background: transparent !important;
+  border-top: 1px solid rgba(0, 212, 170, 0.2) !important;
+}

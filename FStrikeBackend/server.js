@@ -141,6 +141,28 @@ app.get('/test-tracker/:id', (req, res) => {
   res.redirect(`/tracker/${pixelId}.png`);
 });
 
+// CORS Proxy endpoint for handling cross-origin requests
+app.all('/api/cors-proxy/:sessionToken', async (req, res) => {
+  try {
+    const sessionToken = req.params.sessionToken;
+    console.log(`🌐 CORS proxy request for session: ${sessionToken}`);
+    
+    await websiteMirroringService.handleCrossOriginRequest(req, res, sessionToken);
+  } catch (error) {
+    console.error('Error in CORS proxy:', error);
+    res.status(500).json({ error: 'CORS proxy failed' });
+  }
+});
+
+// Handle preflight CORS requests
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, X-Proxy-Target, X-Original-Host');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).end();
+});
+
 // Website mirroring path-based route handler (must be before other routes)
 app.use('/:sessionToken', async (req, res, next) => {
   // Check if this is a valid mirroring session token (32-char hex)

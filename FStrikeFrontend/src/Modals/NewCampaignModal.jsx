@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaRocket, FaEnvelope, FaGlobe, FaUsers, FaCalendar, FaLink } from 'react-icons/fa';
 import { fetchProfiles, fetchTemplates, fetchLandingPages, fetchGroups } from '../services/apiService';
 import httpClient from '../services/httpClient';
 
@@ -161,67 +161,87 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
   const hasMissingOptions = Object.values(missingOptions).some(Boolean);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/30">
-      <div className="w-full max-w-2xl bg-white rounded-md shadow-lg">
-        <div className="border-b px-6 py-4 flex justify-between items-center">
-          <h2 className="text-2xl font-semibold text-gray-800">New Campaign</h2>
-          <button 
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 transition-colors"
-          >
-            <FaTimes size={20} />
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/50">
+      <div className="glass-card w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="relative p-6 border-b border-cyber-primary/20">
+          <div className="absolute inset-0 bg-gradient-to-r from-cyber-primary/10 to-cyber-secondary/10"></div>
+          <div className="relative z-10 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <FaRocket className="text-cyber-primary text-2xl" />
+              <h2 className="text-2xl font-bold text-cyber-primary">Deploy Campaign</h2>
+            </div>
+            <button 
+              onClick={onClose}
+              className="glass-button p-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
+            >
+              <FaTimes size={20} />
+            </button>
+          </div>
+          <p className="text-cyber-muted text-sm mt-2 relative z-10">
+            Configure and launch a new phishing simulation campaign
+          </p>
         </div>
 
+        {/* Error Messages */}
         {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 text-sm" role="alert">
+          <div className="bg-red-400/10 border border-red-400/20 text-red-400 px-6 py-3 text-sm">
             <strong className="font-semibold">{error}</strong>
           </div>
         )}
 
         {validationError && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 text-sm" role="alert">
+          <div className="bg-red-400/10 border border-red-400/20 text-red-400 px-6 py-3 text-sm">
             <strong className="font-semibold">{validationError}</strong>
           </div>
         )}
 
         {!error && hasMissingOptions && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 text-sm space-y-1" role="alert">
+          <div className="bg-red-400/10 border border-red-400/20 text-red-400 px-6 py-3 text-sm space-y-1">
             {missingOptions.profiles && (
-              <div><strong className="font-semibold">No Sending Profiles added</strong></div>
+              <div><strong className="font-semibold">No Sending Profiles configured</strong></div>
             )}
             {missingOptions.templates && (
-              <div><strong className="font-semibold">No Email Templates added</strong></div>
+              <div><strong className="font-semibold">No Email Templates configured</strong></div>
             )}
             {missingOptions.landingPages && (
-              <div><strong className="font-semibold">No Landing Pages added</strong></div>
+              <div><strong className="font-semibold">No Landing Pages configured</strong></div>
             )}
             {missingOptions.groups && (
-              <div><strong className="font-semibold">No Groups added</strong></div>
+              <div><strong className="font-semibold">No Target Groups configured</strong></div>
             )}
           </div>
         )}
 
-        <div className="px-6 py-4 space-y-4">
+        {/* Form Content */}
+        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Campaign Name */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Name:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaRocket />
+              <span>Campaign Name</span>
+            </label>
             <input
               type="text"
               name="name"
-              placeholder="Campaign name"
+              placeholder="Enter campaign name"
               value={formData.name}
               onChange={handleInputChange}
-              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+              className="glass-select w-full px-4 py-3 rounded-lg"
             />
           </div>
 
+          {/* Email Template */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Email Template:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaEnvelope />
+              <span>Email Template</span>
+            </label>
             <select 
               name="templateId"
               value={formData.templateId}
               onChange={handleInputChange}
-              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
+              className="glass-select w-full px-4 py-3 rounded-lg"
               disabled={loading || missingOptions.templates}
             >
               <option value="">Select Template</option>
@@ -233,16 +253,21 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
             </select>
           </div>
 
+          {/* Landing Page Options */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Landing Page Options:</label>
-            <div className="space-y-3">
+            <label className="block text-cyber-muted text-sm font-medium mb-4 flex items-center space-x-2">
+              <FaGlobe />
+              <span>Target Configuration</span>
+            </label>
+            <div className="space-y-4">
               {/* Regular Landing Page Option */}
-              <div>
+              <div className="glass-card p-4">
+                <h4 className="text-cyber-secondary font-medium mb-3">Standard Landing Page</h4>
                 <select 
                   name="landingPageId"
                   value={formData.landingPageId}
                   onChange={handleInputChange}
-                  className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
+                  className="glass-select w-full px-4 py-3 rounded-lg"
                   disabled={loading || missingOptions.landingPages || formData.useEvilginx || formData.useWebsiteMirroring}
                 >
                   <option value="">Select Landing Page</option>
@@ -255,8 +280,8 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
               </div>
               
               {/* Evilginx Option */}
-              <div className="border rounded-md p-3 bg-gray-50">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="glass-card p-4">
+                <div className="flex items-center space-x-3 mb-3">
                   <input
                     type="checkbox"
                     id="useEvilginx"
@@ -269,10 +294,10 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
                         useWebsiteMirroring: e.target.checked ? false : prev.useWebsiteMirroring
                       }));
                     }}
-                    className="w-4 h-4 text-blue-600"
+                    className="w-4 h-4 text-cyber-primary bg-transparent border-cyber-primary/50 rounded focus:ring-cyber-primary/50"
                   />
-                  <label htmlFor="useEvilginx" className="text-sm font-medium text-gray-700">
-                    🔗 Use Evilginx URL
+                  <label htmlFor="useEvilginx" className="text-cyber-secondary font-medium">
+                    🔗 Evilginx Integration
                   </label>
                 </div>
                 {formData.useEvilginx && (
@@ -282,14 +307,14 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
                     placeholder="Enter Evilginx URL"
                     value={formData.evilginxUrl}
                     onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                    className="glass-select w-full px-4 py-3 rounded-lg"
                   />
                 )}
               </div>
 
               {/* Website Mirroring Option */}
-              <div className="border rounded-md p-3 bg-blue-50">
-                <div className="flex items-center gap-2 mb-2">
+              <div className="glass-card p-4">
+                <div className="flex items-center space-x-3 mb-3">
                   <input
                     type="checkbox"
                     id="useWebsiteMirroring"
@@ -302,29 +327,29 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
                         useEvilginx: e.target.checked ? false : prev.useEvilginx
                       }));
                     }}
-                    className="w-4 h-4 text-blue-600"
+                    className="w-4 h-4 text-cyber-primary bg-transparent border-cyber-primary/50 rounded focus:ring-cyber-primary/50"
                   />
-                  <label htmlFor="useWebsiteMirroring" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="useWebsiteMirroring" className="text-cyber-secondary font-medium">
                     🌐 Real-time Website Mirroring
                   </label>
                 </div>
                 {formData.useWebsiteMirroring && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     <input
                       type="text"
                       name="mirrorTargetUrl"
                       placeholder="Enter website URL to mirror (e.g., facebook.com, gmail.com)"
                       value={formData.mirrorTargetUrl}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                      className="glass-select w-full px-4 py-3 rounded-lg"
                     />
-                    <div className="text-xs text-gray-600 bg-blue-100 p-2 rounded">
-                      <p className="font-medium mb-1">🚀 Real-time website mirroring will:</p>
-                      <ul className="list-disc list-inside space-y-1">
-                        <li>Create a live proxy of the target website</li>
-                        <li>Track all user interactions and form submissions</li>
-                        <li>Maintain full functionality of the original site</li>
-                        <li>Inject tracking pixels for comprehensive analytics</li>
+                    <div className="bg-cyber-primary/5 border border-cyber-primary/20 p-3 rounded-lg">
+                      <p className="text-cyber-primary font-medium text-sm mb-2">🚀 Advanced Mirroring Features:</p>
+                      <ul className="text-cyber-muted text-xs space-y-1">
+                        <li>• Live proxy of target website</li>
+                        <li>• Real-time interaction tracking</li>
+                        <li>• Full functionality preservation</li>
+                        <li>• Comprehensive analytics injection</li>
                       </ul>
                     </div>
                   </div>
@@ -333,100 +358,125 @@ const NewCampaignModal = ({ isOpen, onClose, onSave }) => {
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">URL:</label>
-            <input
-              type="text"
-              name="url"
-              placeholder="http://192.168.1.1"
-              value={formData.url}
-              onChange={handleInputChange}
-              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
-            />
-          </div>
-
-          <div className="flex flex-col md:flex-row md:space-x-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Launch Date</label>
+          {/* URL and Dates */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+                <FaLink />
+                <span>Campaign URL</span>
+              </label>
+              <input
+                type="text"
+                name="url"
+                placeholder="http://192.168.1.1"
+                value={formData.url}
+                onChange={handleInputChange}
+                className="glass-select w-full px-4 py-3 rounded-lg"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+                <FaCalendar />
+                <span>Launch Date</span>
+              </label>
               <input
                 type="text"
                 name="launchDate"
                 value={formData.launchDate}
                 onChange={handleInputChange}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Send Emails By (Optional)</label>
-              <input
-                type="text"
-                name="sendByDate"
-                value={formData.sendByDate}
-                onChange={handleInputChange}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring focus:ring-blue-200"
+                className="glass-select w-full px-4 py-3 rounded-lg"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">Sending Profile:</label>
-            <div className="flex space-x-2">
+            <label className="block text-cyber-muted text-sm font-medium mb-2">Send Emails By (Optional)</label>
+            <input
+              type="text"
+              name="sendByDate"
+              value={formData.sendByDate}
+              onChange={handleInputChange}
+              className="glass-select w-full px-4 py-3 rounded-lg"
+              placeholder="Optional deadline for email delivery"
+            />
+          </div>
+
+          {/* Sending Profile and Groups */}
+          <div className="grid md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2">Sending Profile</label>
+              <div className="space-y-2">
+                <select 
+                  name="profileId"
+                  value={formData.profileId}
+                  onChange={handleInputChange}
+                  className="glass-select w-full px-4 py-3 rounded-lg"
+                  disabled={loading || missingOptions.profiles}
+                >
+                  <option value="">Select Sending Profile</option>
+                  {profiles.map(profile => (
+                    <option key={profile.profileId} value={profile.profileId}>
+                      {profile.name}
+                    </option>
+                  ))}
+                </select>
+                <button 
+                  className="glass-button px-4 py-2 text-sm rounded-lg disabled:opacity-50"
+                  disabled={loading || missingOptions.profiles}
+                >
+                  Send Test Email
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+                <FaUsers />
+                <span>Target Groups</span>
+              </label>
               <select 
-                name="profileId"
-                value={formData.profileId}
+                name="groupId"
+                value={formData.groupId}
                 onChange={handleInputChange}
-                className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
-                disabled={loading || missingOptions.profiles}
+                className="glass-select w-full px-4 py-3 rounded-lg"
+                disabled={loading || missingOptions.groups}
               >
-                <option value="">Select Sending Profile</option>
-                {profiles.map(profile => (
-                  <option key={profile.profileId} value={profile.profileId}>
-                    {profile.name}
+                <option value="">Select Target Group</option>
+                {groups.map(group => (
+                  <option key={group.id} value={group.id}>
+                    {group.group_name}
                   </option>
                 ))}
               </select>
-              <button 
-                className="mt-1 px-4 py-2 text-sm border border-gray-300 rounded-md bg-gray-100 hover:bg-gray-200"
-                disabled={loading || missingOptions.profiles}
-              >
-                Send Test Email
-              </button>
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Groups:</label>
-            <select 
-              name="groupId"
-              value={formData.groupId}
-              onChange={handleInputChange}
-              className="w-full mt-1 px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring focus:ring-blue-200"
-              disabled={loading || missingOptions.groups}
-            >
-              <option value="">Select Group</option>
-              {groups.map(group => (
-                <option key={group.id} value={group.id}>
-                  {group.group_name}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end border-t px-6 py-4 space-x-2">
+        <div className="flex justify-end border-t border-cyber-primary/20 px-6 py-4 space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-md text-gray-700 border border-gray-300 bg-white hover:bg-gray-100"
+            className="glass-button px-6 py-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
           >
-            Close
+            Cancel
           </button>
           <button 
             onClick={handleSubmit}
             disabled={hasMissingOptions || submitting}
-            className="px-4 py-2 rounded-md text-white bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-300 disabled:cursor-not-allowed"
+            className="glass-button px-6 py-2 rounded-lg hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
           >
-            {submitting ? 'Saving...' : 'Launch Campaign'}
+            {submitting ? (
+              <div className="flex items-center space-x-2">
+                <div className="loading-spinner w-4 h-4"></div>
+                <span>Deploying...</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2">
+                <FaRocket />
+                <span>Launch Campaign</span>
+              </div>
+            )}
           </button>
         </div>
       </div>

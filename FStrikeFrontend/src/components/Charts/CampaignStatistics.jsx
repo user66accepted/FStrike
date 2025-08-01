@@ -8,25 +8,25 @@ const CampaignStatistics = ({ stats }) => {
   // If no stats available yet, show loading or empty state
   if (!stats) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 text-center">
-        <p className="text-lg text-gray-600">No statistics available</p>
+      <div className="glass-card p-8 text-center">
+        <p className="text-lg text-cyber-muted">No statistics available</p>
       </div>
     );
   }
 
-  // Colors for charts
+  // Professional color scheme for charts
   const colors = {
-    blue: '#3B82F6',
-    lightBlue: '#93C5FD',
-    green: '#10B981',
-    amber: '#F59E0B',
-    red: '#EF4444',
-    gray: '#E5E7EB',
-    purple: '#8B5CF6',
-    indigo: '#6366F1'
+    primary: '#00d4aa',
+    secondary: '#00a8ff',
+    accent: '#ff3838',
+    warning: '#ffa726',
+    success: '#4caf50',
+    muted: '#8ea5b0',
+    purple: '#9c27b0',
+    indigo: '#3f51b5'
   };
 
-  // Data for email metrics bar chart
+  // Data for email metrics bar chart with cyber theme
   const barChartData = {
     labels: ['Emails Sent', 'Emails Opened', 'Links Clicked', 'Unique Clicks', 'Spam Opens'],
     datasets: [
@@ -40,11 +40,18 @@ const CampaignStatistics = ({ stats }) => {
           stats.spamOpens
         ],
         backgroundColor: [
-          colors.blue,
-          colors.green,
-          colors.amber,
-          colors.purple,
-          colors.red
+          colors.primary,
+          colors.success,
+          colors.warning,
+          colors.secondary,
+          colors.accent
+        ],
+        borderColor: [
+          colors.primary,
+          colors.success,
+          colors.warning,
+          colors.secondary,
+          colors.accent
         ],
         borderWidth: 1
       }
@@ -59,12 +66,13 @@ const CampaignStatistics = ({ stats }) => {
     labels: ['Legitimate Opens', 'Spam Opens'],
     datasets: [{
       data: [legitimateOpens, stats.spamOpens],
-      backgroundColor: [colors.green, colors.red],
-      borderWidth: 0
+      backgroundColor: [colors.success, colors.accent],
+      borderColor: [colors.success, colors.accent],
+      borderWidth: 2
     }]
   };
 
-  // Options for bar chart
+  // Professional chart options
   const barOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -73,6 +81,11 @@ const CampaignStatistics = ({ stats }) => {
         display: false
       },
       tooltip: {
+        backgroundColor: 'rgba(10, 15, 20, 0.9)',
+        titleColor: colors.primary,
+        bodyColor: '#e8f4f8',
+        borderColor: colors.primary,
+        borderWidth: 1,
         callbacks: {
           label: (context) => `Count: ${context.raw}`
         }
@@ -81,15 +94,30 @@ const CampaignStatistics = ({ stats }) => {
     scales: {
       y: {
         beginAtZero: true,
+        grid: {
+          color: 'rgba(0, 212, 170, 0.1)'
+        },
+        ticks: {
+          color: colors.muted
+        },
         title: {
           display: true,
-          text: 'Count'
+          text: 'Count',
+          color: colors.primary
+        }
+      },
+      x: {
+        grid: {
+          color: 'rgba(0, 212, 170, 0.1)'
+        },
+        ticks: {
+          color: colors.muted
         }
       }
     }
   };
 
-  // Options for doughnut charts
+  // Professional doughnut options
   const doughnutOptions = {
     cutout: '70%',
     responsive: true,
@@ -97,9 +125,18 @@ const CampaignStatistics = ({ stats }) => {
     plugins: {
       legend: {
         display: true,
-        position: 'bottom'
+        position: 'bottom',
+        labels: {
+          color: colors.muted,
+          usePointStyle: true
+        }
       },
       tooltip: {
+        backgroundColor: 'rgba(10, 15, 20, 0.9)',
+        titleColor: colors.primary,
+        bodyColor: '#e8f4f8',
+        borderColor: colors.primary,
+        borderWidth: 1,
         callbacks: {
           label: (context) => {
             const label = context.label;
@@ -130,50 +167,67 @@ const CampaignStatistics = ({ stats }) => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Campaign header */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h2 className="text-xl font-bold text-gray-800 mb-2">
-          Campaign: {stats.campaign?.name || 'Unknown Campaign'}
-        </h2>
-        <p className="text-gray-600">
-          {stats.totalSent} emails sent • {stats.totalOpened} opened • {stats.totalClicks} link clicks
-        </p>
+    <div className="space-y-8">
+      {/* Campaign Summary Header */}
+      <div className="glass-card p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-2xl font-bold text-cyber-primary">
+            {stats.campaign?.name || 'Campaign Analytics'}
+          </h2>
+          <div className="badge badge-success">Active</div>
+        </div>
+        <div className="grid grid-cols-3 gap-6">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-cyber-primary mb-1">{stats.totalSent}</div>
+            <div className="text-sm text-cyber-muted">Emails Sent</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-cyber-secondary mb-1">{stats.totalOpened}</div>
+            <div className="text-sm text-cyber-muted">Emails Opened</div>
+          </div>
+          <div className="text-center">
+            <div className="text-3xl font-bold text-cyber-accent mb-1">{stats.totalClicks}</div>
+            <div className="text-sm text-cyber-muted">Link Clicks</div>
+          </div>
+        </div>
       </div>
 
       {/* Main metrics charts grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Bar chart for overall metrics */}
-        <div className="bg-white rounded-lg shadow p-4 lg:col-span-2">
-          <h3 className="text-lg font-semibold mb-2">Email Engagement Metrics</h3>
+        <div className="glass-card p-6 lg:col-span-2">
+          <h3 className="text-xl font-semibold text-cyber-primary mb-4">Engagement Metrics</h3>
           <div className="h-80">
             <Bar data={barChartData} options={barOptions} />
           </div>
         </div>
 
-        {/* Email Quality Summary */}
-        <div className="bg-white rounded-lg shadow p-4">
-          <h3 className="text-lg font-semibold mb-4">Email Quality Analysis</h3>
+        {/* Email Quality Analysis */}
+        <div className="glass-card p-6">
+          <h3 className="text-xl font-semibold text-cyber-primary mb-6">Quality Analysis</h3>
           <div className="space-y-6">
-            <div>
-              <p className="text-sm text-gray-500 mb-2">Open Quality Distribution</p>
-              <div className="h-48">
-                <Doughnut 
-                  data={emailQualityData} 
-                  options={doughnutOptions} 
-                />
-              </div>
+            <div className="h-48">
+              <Doughnut 
+                data={emailQualityData} 
+                options={doughnutOptions} 
+              />
             </div>
             
-            <div className="pt-4 border-t">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Legitimate Opens</p>
-                  <p className="text-2xl font-bold text-green-600">{stats.legitimateOpenPercentage}%</p>
+            <div className="grid grid-cols-1 gap-4">
+              <div className="glass-card p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-cyber-muted">Legitimate Opens</span>
+                  <span className="text-xl font-bold text-cyber-primary">
+                    {stats.legitimateOpenPercentage || calculatePercentage(legitimateOpens, stats.totalOpened)}%
+                  </span>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Spam Opens</p>
-                  <p className="text-2xl font-bold text-red-600">{stats.spamOpenPercentage}%</p>
+              </div>
+              <div className="glass-card p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-cyber-muted">Spam Detection</span>
+                  <span className="text-xl font-bold text-cyber-accent">
+                    {stats.spamOpenPercentage || calculatePercentage(stats.spamOpens, stats.totalOpened)}%
+                  </span>
                 </div>
               </div>
             </div>
@@ -181,50 +235,41 @@ const CampaignStatistics = ({ stats }) => {
         </div>
       </div>
 
-      {/* Timeline and details */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <h3 className="text-lg font-semibold mb-4">Email Activity Timeline</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
+      {/* Activity Timeline */}
+      <div className="glass-card p-6">
+        <h3 className="text-xl font-semibold text-cyber-primary mb-6">Activity Timeline</h3>
+        <div className="data-table rounded-lg overflow-hidden">
+          <table className="w-full">
             <thead>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sent At</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Opened At</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                <th className="text-left">Email Address</th>
+                <th className="text-left">Sent At</th>
+                <th className="text-left">Opened At</th>
+                <th className="text-left">Status</th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {currentEmails.map((email, index) => {
-                // Find if this email has been opened
                 const openInfo = stats.openedEmails.find(o => o.email === email.email);
                 
                 return (
                   <tr key={startIndex + index}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {email.email}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="font-mono text-sm">{email.email}</td>
+                    <td className="text-sm">
                       {new Date(email.sentAt).toLocaleString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="text-sm">
                       {openInfo ? new Date(openInfo.openedAt).toLocaleString() : '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
+                    <td>
                       {openInfo ? (
                         openInfo.isSpam ? (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
-                            Spam Open
-                          </span>
+                          <div className="badge badge-danger">Spam Open</div>
                         ) : (
-                          <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                            Legitimate Open
-                          </span>
+                          <div className="badge badge-success">Legitimate</div>
                         )
                       ) : (
-                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
-                          Sent
-                        </span>
+                        <div className="badge badge-warning">Sent</div>
                       )}
                     </td>
                   </tr>
@@ -233,115 +278,43 @@ const CampaignStatistics = ({ stats }) => {
             </tbody>
           </table>
 
-          {/* Pagination Controls */}
+          {/* Professional Pagination */}
           {totalPages > 1 && (
-            <div className="mt-4 flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6">
-              <div className="flex flex-1 justify-between sm:hidden">
+            <div className="flex items-center justify-between p-4 border-t border-cyber-primary/20">
+              <div className="text-sm text-cyber-muted">
+                Showing {startIndex + 1} to {Math.min(endIndex, stats?.sentEmails?.length || 0)} of {stats?.sentEmails?.length || 0} results
+              </div>
+              <div className="flex items-center space-x-2">
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`relative inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium ${
-                    currentPage === 1
-                      ? 'bg-gray-100 text-gray-400'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className="glass-button px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Previous
                 </button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const pageNum = Math.max(1, Math.min(totalPages - 4, currentPage - 2)) + i;
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      className={`px-3 py-1 text-sm rounded ${
+                        currentPage === pageNum 
+                          ? 'bg-cyber-primary text-black' 
+                          : 'glass-button'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`relative ml-3 inline-flex items-center rounded-md border border-gray-300 px-4 py-2 text-sm font-medium ${
-                    currentPage === totalPages
-                      ? 'bg-gray-100 text-gray-400'
-                      : 'bg-white text-gray-700 hover:bg-gray-50'
-                  }`}
+                  className="glass-button px-3 py-1 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next
                 </button>
-              </div>
-              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm text-gray-700">
-                    Showing <span className="font-medium">{startIndex + 1}</span> to{' '}
-                    <span className="font-medium">
-                      {Math.min(endIndex, stats?.sentEmails?.length || 0)}
-                    </span>{' '}
-                    of <span className="font-medium">{stats?.sentEmails?.length || 0}</span> results
-                  </p>
-                </div>
-                <div>
-                  <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                    <button
-                      onClick={() => handlePageChange(currentPage - 1)}
-                      disabled={currentPage === 1}
-                      className={`relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${
-                        currentPage === 1 ? 'cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <span className="sr-only">Previous</span>
-                      <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter(page => {
-                        return (
-                          page === 1 ||
-                          page === totalPages ||
-                          Math.abs(page - currentPage) <= 1
-                        );
-                      })
-                      .map((page, index, array) => {
-                        if (index > 0 && page - array[index - 1] > 1) {
-                          return [
-                            <span
-                              key={`ellipsis-${page}`}
-                              className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300 focus:outline-offset-0"
-                            >
-                              ...
-                            </span>,
-                            <button
-                              key={page}
-                              onClick={() => handlePageChange(page)}
-                              className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                currentPage === page
-                                  ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                                  : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          ];
-                        }
-                        return (
-                          <button
-                            key={page}
-                            onClick={() => handlePageChange(page)}
-                            className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                              currentPage === page
-                                ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                                : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        );
-                      })}
-                    <button
-                      onClick={() => handlePageChange(currentPage + 1)}
-                      disabled={currentPage === totalPages}
-                      className={`relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 ${
-                        currentPage === totalPages ? 'cursor-not-allowed' : ''
-                      }`}
-                    >
-                      <span className="sr-only">Next</span>
-                      <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                        <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                      </svg>
-                    </button>
-                  </nav>
-                </div>
               </div>
             </div>
           )}

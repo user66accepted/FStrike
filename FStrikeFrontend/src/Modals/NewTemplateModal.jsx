@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { FaFileImport, FaTrash } from "react-icons/fa";
+import { FaFileImport, FaTrash, FaTimes, FaEnvelope, FaCode, FaImage, FaPaperclip } from "react-icons/fa";
 import ImportEmailModal from "./ImportEmailModal";
 import RichTextEditor from "../Utils/RichTextEditor";
 import httpClient from "../services/httpClient";
@@ -166,157 +166,233 @@ const NewTemplateModal = ({ isOpen, onClose, initialTemplate }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-opacity-30 backdrop-blur-md">
-      <div className="bg-white w-full max-w-4xl rounded-lg shadow-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-4 border-b border-gray-300">
-          <h2 className="text-3xl font-semibold">
-            {initialTemplate ? "Edit Template" : "New Template"}
-          </h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700 transition">
-            &times;
-          </button>
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/50">
+      <div className="glass-card w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="relative p-6 border-b border-cyber-primary/20">
+          <div className="absolute inset-0 bg-gradient-to-r from-cyber-primary/10 to-cyber-secondary/10"></div>
+          <div className="relative z-10 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <FaEnvelope className="text-cyber-primary text-2xl" />
+              <h2 className="text-2xl font-bold text-cyber-primary">
+                {initialTemplate ? "Edit Template" : "Create Email Template"}
+              </h2>
+            </div>
+            <button 
+              onClick={onClose}
+              className="glass-button p-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
+            >
+              <FaTimes size={20} />
+            </button>
+          </div>
+          <p className="text-cyber-muted text-sm mt-2 relative z-10">
+            Design professional email templates for phishing simulations
+          </p>
         </div>
-        <div className="p-4 space-y-4">
-          <div className="flex items-center gap-4">
+
+        {/* Form Content */}
+        <div className="p-6 space-y-6 max-h-[60vh] overflow-y-auto">
+          {/* Template Name and Import */}
+          <div className="flex items-end gap-4">
             <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-700">Name:</label>
+              <label className="block text-cyber-muted text-sm font-medium mb-2">Template Name</label>
               <input
                 type="text"
                 value={templateName}
                 required
                 onChange={(e) => setTemplateName(e.target.value)}
-                className="mt-1 w-full border border-gray-300 rounded-md p-2"
-                placeholder="Template name"
+                className="glass-select w-full px-4 py-3 rounded-lg"
+                placeholder="Enter template name"
               />
             </div>
             <button
               onClick={() => setShowImportModal(true)}
-              className="mt-6 bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md flex items-center gap-2 cursor-pointer"
+              className="glass-button px-4 py-3 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform"
             >
-              <FaFileImport /> Import Email
+              <FaFileImport />
+              <span>Import Email</span>
             </button>
           </div>
+
+          {/* Envelope Sender */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Envelope Sender:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2">Envelope Sender</label>
             <input
               type="email"
               value={envelopeSender}
               required
               onChange={(e) => setEnvelopeSender(e.target.value)}
-              className="mt-1 w-full border border-gray-300 rounded-md p-2"
-              placeholder="user@example.com"
+              className="glass-select w-full px-4 py-3 rounded-lg"
+              placeholder="sender@example.com"
             />
           </div>
+
+          {/* Subject */}
           <div>
-            <label className="block text-sm font-medium text-gray-700">Subject:</label>
+            <label className="block text-cyber-muted text-sm font-medium mb-2">Email Subject</label>
             <input
               type="text"
               value={subject}
               required
               onChange={(e) => setSubject(e.target.value)}
-              className="mt-1 w-full border border-gray-300 rounded-md p-2"
-              placeholder="Email Subject"
+              className="glass-select w-full px-4 py-3 rounded-lg"
+              placeholder="Enter email subject"
             />
           </div>
+
+          {/* Content Tabs */}
           <div>
-            <div className="flex border-b border-gray-300 mb-2">
+            <div className="flex border-b border-cyber-primary/20 mb-4">
               <button
                 onClick={() => setActiveTab("text")}
-                className={`px-4 py-2 font-semibold ${
-                  activeTab === "text" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === "text" 
+                    ? "border-b-2 border-cyber-primary text-cyber-primary" 
+                    : "text-cyber-muted hover:text-cyber-secondary"
                 }`}
               >
-                Text
+                <div className="flex items-center space-x-2">
+                  <FaCode />
+                  <span>Text Content</span>
+                </div>
               </button>
               <button
                 onClick={() => setActiveTab("html")}
-                className={`px-4 py-2 font-semibold ${
-                  activeTab === "html" ? "border-b-2 border-blue-500 text-blue-500" : "text-gray-500"
+                className={`px-4 py-2 font-medium transition-colors ${
+                  activeTab === "html" 
+                    ? "border-b-2 border-cyber-primary text-cyber-primary" 
+                    : "text-cyber-muted hover:text-cyber-secondary"
                 }`}
               >
-                HTML
+                <div className="flex items-center space-x-2">
+                  <FaCode />
+                  <span>HTML Content</span>
+                </div>
               </button>
             </div>
+
             {activeTab === "text" ? (
               <textarea
-                className="w-full border border-gray-300 rounded-md p-2 h-32"
-                placeholder="Enter text content here..."
+                className="glass-select w-full px-4 py-3 rounded-lg h-32 resize-none"
+                placeholder="Enter plain text content..."
                 value={textContent}
                 onChange={(e) => setTextContent(e.target.value)}
               />
             ) : (
-              <RichTextEditor value={htmlContent} onChange={setHtmlContent} />
+              <div className="glass-card p-4">
+                <RichTextEditor value={htmlContent} onChange={setHtmlContent} />
+              </div>
             )}
           </div>
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={addTrackingImage}
-              onChange={() => setAddTrackingImage(!addTrackingImage)}
-              className="h-5 w-5"
-            />
-            <label className="text text-gray-700">Add Tracking Image</label>
+
+          {/* Tracking Image Option */}
+          <div className="glass-card p-4">
+            <div className="flex items-center space-x-3">
+              <input
+                type="checkbox"
+                id="addTracking"
+                checked={addTrackingImage}
+                onChange={() => setAddTrackingImage(!addTrackingImage)}
+                className="w-4 h-4 text-cyber-primary bg-transparent border-cyber-primary/50 rounded focus:ring-cyber-primary/50"
+              />
+              <label htmlFor="addTracking" className="text-cyber-secondary font-medium flex items-center space-x-2">
+                <FaImage />
+                <span>Add Email Tracking</span>
+              </label>
+            </div>
+            {addTrackingImage && (
+              <div className="mt-3 bg-cyber-primary/5 border border-cyber-primary/20 p-3 rounded-lg">
+                <p className="text-cyber-primary font-medium text-sm mb-1">📊 Multi-Layer Tracking Enabled</p>
+                <p className="text-cyber-muted text-xs">
+                  Invisible tracking pixels will monitor email opens and engagement
+                </p>
+              </div>
+            )}
           </div>
-          <div className="mt-10">
-            <input type="file" id="file-upload" multiple className="hidden" onChange={handleFileUpload} />
-            <label
-              htmlFor="file-upload"
-              className="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded-md cursor-pointer"
-            >
-              + Add Files
-            </label>
-          </div>
-          <div className="border rounded-md p-4 border-gray-300">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-gray-300">
-                  <th className="p-2">Name</th>
-                  <th className="p-2 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paginatedAttachments.length > 0 ? (
-                  paginatedAttachments.map((file, index) => (
-                    <tr key={index}>
-                      <td className="p-2 text-gray-700 flex items-center gap-2">
-                        📄 {file.original_name || file.name}
-                      </td>
-                      <td className="p-2 text-right">
-                        <button
-                          onClick={() => handleDeleteFile((currentPage - 1) * itemsPerPage + index)}
-                          className="text-red-500 hover:text-red-700"
-                        >
-                          <FaTrash />
-                        </button>
+
+          {/* File Attachments */}
+          <div className="glass-card p-4">
+            <div className="flex items-center justify-between mb-4">
+              <label className="text-cyber-secondary font-medium flex items-center space-x-2">
+                <FaPaperclip />
+                <span>Attachments</span>
+              </label>
+              <div>
+                <input 
+                  type="file" 
+                  id="file-upload" 
+                  multiple 
+                  className="hidden" 
+                  onChange={handleFileUpload} 
+                />
+                <label
+                  htmlFor="file-upload"
+                  className="glass-button px-4 py-2 text-sm rounded-lg cursor-pointer hover:scale-105 transition-transform"
+                >
+                  + Add Files
+                </label>
+              </div>
+            </div>
+
+            <div className="data-table rounded-lg overflow-hidden">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-cyber-primary/20">
+                    <th className="p-3 text-left text-cyber-primary font-medium">Filename</th>
+                    <th className="p-3 text-right text-cyber-primary font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginatedAttachments.length > 0 ? (
+                    paginatedAttachments.map((file, index) => (
+                      <tr key={index} className="border-b border-cyber-primary/10">
+                        <td className="p-3 text-cyber-secondary flex items-center space-x-2">
+                          <FaPaperclip className="text-cyber-muted" />
+                          <span>{file.original_name || file.name}</span>
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => handleDeleteFile((currentPage - 1) * itemsPerPage + index)}
+                            className="text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan="2" className="p-8 text-center text-cyber-muted italic">
+                        No attachments added
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="2" className="p-2 text-gray-500 text-center">
-                      No files uploaded
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          <div className="flex justify-end gap-4 mt-4">
-            <button
-              onClick={onClose}
-              className="bg-gray-300 hover:bg-gray-400 text-black font-semibold py-2 px-4 rounded-md"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSaveTemplate}
-              className="bg-green-500 hover:bg-green-600 text-white font-semibold py-2 px-4 rounded-md"
-            >
-              Save Template
-            </button>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </div>
+
+        {/* Footer */}
+        <div className="flex justify-end border-t border-cyber-primary/20 px-6 py-4 space-x-3">
+          <button
+            onClick={onClose}
+            className="glass-button px-6 py-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSaveTemplate}
+            className="glass-button px-6 py-2 rounded-lg hover:scale-105 transition-transform"
+          >
+            <div className="flex items-center space-x-2">
+              <FaEnvelope />
+              <span>Save Template</span>
+            </div>
+          </button>
+        </div>
       </div>
+
       {/* Import Email Modal */}
       {showImportModal && (
         <ImportEmailModal

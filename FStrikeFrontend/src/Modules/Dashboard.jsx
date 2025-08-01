@@ -11,13 +11,10 @@ import {
   PointElement,
   LineElement,
 } from "chart.js";
-import { Bar, Doughnut, Line } from "react-chartjs-2";
 import httpClient from "../services/httpClient";
 import { fetchCampaigns } from "../services/apiService";
 import CampaignStatistics from "../components/Charts/CampaignStatistics";
-import FormDataList from "../components/FormSubmissions/FormDataList";
 import LoginAttemptsList from "../components/LoginAttempts/LoginAttemptsList";
-import RecentCampaigns from "./Campaigns/RecentCampaigns";
 import CookiesListener from "../components/CookieListener";
 
 // Register Chart.js components and plugins
@@ -32,6 +29,62 @@ ChartJS.register(
   Legend,
   Title
 );
+
+// Subtle Matrix Background Component
+const MatrixBackground = () => {
+  useEffect(() => {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.className = 'matrix-bg';
+    document.body.appendChild(canvas);
+    
+    const resizeCanvas = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    const chars = '01';
+    const fontSize = 14;
+    const columns = Math.floor(canvas.width / fontSize);
+    const drops = new Array(columns).fill(0);
+    
+    const draw = () => {
+      ctx.fillStyle = 'rgba(10, 15, 20, 0.1)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.fillStyle = 'rgba(0, 212, 170, 0.1)';
+      ctx.font = `${fontSize}px monospace`;
+      
+      for (let i = 0; i < drops.length; i++) {
+        const char = chars[Math.floor(Math.random() * chars.length)];
+        const x = i * fontSize;
+        const y = drops[i] * fontSize;
+        
+        ctx.fillText(char, x, y);
+        
+        if (y > canvas.height && Math.random() > 0.99) {
+          drops[i] = 0;
+        }
+        drops[i]++;
+      }
+    };
+    
+    const interval = setInterval(draw, 100);
+    
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('resize', resizeCanvas);
+      if (document.body.contains(canvas)) {
+        document.body.removeChild(canvas);
+      }
+    };
+  }, []);
+  
+  return null;
+};
 
 const Dashboard = () => {
   const [campaigns, setCampaigns] = useState([]);
@@ -181,104 +234,195 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="p-6">
-      {/* Title and Campaign Selector */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-4xl font-bold text-gray-800">Dashboard</h1>
-        
-        <div className="flex items-center space-x-4">
-          {/* Auto-refresh toggle */}
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">
-              Auto-refresh: 
-              <span className="text-xs ml-1">
-                (Last updated: {formatLastUpdated()})
-              </span>
-            </span>
-            <button
-              onClick={toggleAutoRefresh}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full ${
-                autoRefresh ? 'bg-blue-600' : 'bg-gray-300'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
-                  autoRefresh ? 'translate-x-6' : 'translate-x-1'
-                }`}
-              />
-            </button>
-            <button
-              onClick={() => {
-                loadCampaigns();
-                if (selectedCampaign) {
-                  fetchCampaignStats(selectedCampaign.id);
-                }
-                setLastUpdated(new Date());
-              }}
-              className="ml-2 p-1 rounded-full bg-gray-100 hover:bg-gray-200"
-              title="Refresh now"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-          </div>
-          
-          <label htmlFor="campaignSelect" className="mr-2 font-medium text-gray-700">
-            Select Campaign:
-          </label>
-          <select
-            id="campaignSelect"
-            className="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            onChange={handleCampaignChange}
-            value={selectedCampaign?.id || ""}
-            disabled={loading}
-          >
-            <option value="">Select a campaign</option>
-            {campaigns.map((campaign) => (
-              <option key={campaign.id} value={campaign.id}>
-                {campaign.name} - In Progress
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Main content */}
-      <div className="grid grid-cols-1 gap-6">
-        {selectedCampaign ? (
-          <>
-            {campaignStats ? (
-              <>
-                <CampaignStatistics stats={campaignStats} />
-
-                <CookiesListener campaignId={selectedCampaign.id} />
-                
-                {/* Login Attempts Section */}
-                <LoginAttemptsList campaignId={selectedCampaign.id} />
-              </>
-            ) : (
-              <div className="bg-white rounded-lg shadow p-6 flex justify-center items-center h-64">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                  <p className="text-gray-500">Loading campaign statistics...</p>
+    <div className="min-h-screen">
+      <MatrixBackground />
+      
+      <div className="relative z-10 p-8">
+        {/* Professional Header */}
+        <div className="mb-8">
+          <div className="flex justify-between items-start mb-8">
+            {/* Title Section */}
+            <div className="space-y-2">
+              <div className="flex items-center space-x-4">
+                <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">
+                  F-Strike Operations Analysis
+                </h1>
+              </div>
+              <p className="text-cyber-muted">
+                Advanced Phishing Campaign Management • Real-time Analytics
+              </p>
+            </div>
+            
+            {/* Control Panel */}
+            <div className="flex items-center space-x-4">
+              {/* System Status */}
+              <div className="glass-card px-4 py-2">
+                <div className="flex items-center space-x-2 text-sm">
+                  <div className="w-2 h-2 bg-green-400 rounded-full status-indicator"></div>
+                  <span className="text-cyber-muted">System Operational</span>
+                  <span className="text-xs text-cyber-primary ml-2">
+                    {new Date().toLocaleTimeString()}
+                  </span>
                 </div>
               </div>
-            )}
-          </>
-        ) : (
-          <div className="bg-white rounded-lg shadow p-6">
-            <p className="text-xl text-center text-gray-500">
-              {loading
-                ? "Loading campaigns..."
-                : campaigns.length === 0
-                ? "No active campaigns found. Please launch a campaign to see statistics."
-                : "Please select a campaign to view statistics."}
-            </p>
+              
+              {/* Auto-refresh Toggle */}
+              <div className="glass-card px-4 py-3">
+                <div className="flex items-center space-x-3">
+                  <span className="text-sm text-cyber-muted">Auto-scan</span>
+                  <div 
+                    className={`toggle-switch ${autoRefresh ? 'active' : ''}`}
+                    onClick={toggleAutoRefresh}
+                  >
+                    <div className="toggle-slider"></div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      loadCampaigns();
+                      if (selectedCampaign) {
+                        fetchCampaignStats(selectedCampaign.id);
+                      }
+                      setLastUpdated(new Date());
+                    }}
+                    className="glass-button p-2 rounded-lg"
+                    title="Manual Refresh"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="text-xs text-cyber-muted mt-1">
+                  Last updated: {formatLastUpdated()}
+                </div>
+              </div>
+              
+              {/* Campaign Selector */}
+              <div className="glass-card px-4 py-3 min-w-80">
+                <label className="block text-sm text-cyber-muted mb-2">
+                  Target Campaign
+                </label>
+                <select
+                  className="glass-select w-full px-3 py-2 rounded-lg text-sm"
+                  onChange={handleCampaignChange}
+                  value={selectedCampaign?.id || ""}
+                  disabled={loading}
+                >
+                  <option value="">Select Campaign</option>
+                  {campaigns.map((campaign) => (
+                    <option key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
 
+        {/* Main Content */}
+        <div className="space-y-8">
+          {selectedCampaign ? (
+            <>
+              {campaignStats ? (
+                <>
+                  {/* Campaign Analytics */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div>
+                        <h2 className="text-2xl font-semibold text-cyber-primary mb-2">
+                          {selectedCampaign.name}
+                        </h2>
+                        <p className="text-cyber-muted">Campaign Analytics & Metrics</p>
+                      </div>
+                      <div className="badge badge-success">
+                        Active
+                      </div>
+                    </div>
+                    <div className="chart-container">
+                      <CampaignStatistics stats={campaignStats} />
+                    </div>
+                  </div>
+
+                  {/* Credential Harvesting */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <svg className="w-6 h-6 text-cyber-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                      </svg>
+                      <h3 className="text-xl font-semibold text-cyber-primary">
+                        Credential Harvesting
+                      </h3>
+                    </div>
+                    <CookiesListener campaignId={selectedCampaign.id} />
+                  </div>
+                  
+                  {/* Security Events */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center space-x-3 mb-6">
+                      <svg className="w-6 h-6 text-cyber-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                      </svg>
+                      <h3 className="text-xl font-semibold text-cyber-primary">
+                        Authentication Events
+                      </h3>
+                    </div>
+                    <LoginAttemptsList campaignId={selectedCampaign.id} />
+                  </div>
+                </>
+              ) : (
+                <div className="glass-card p-16 text-center">
+                  <div className="loading-spinner mx-auto mb-6"></div>
+                  <h3 className="text-xl text-cyber-primary mb-2">
+                    Analyzing Campaign Data
+                  </h3>
+                  <p className="text-cyber-muted">
+                    Processing campaign metrics and security events...
+                  </p>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="glass-card p-16 text-center">
+              {loading ? (
+                <>
+                  <div className="loading-spinner mx-auto mb-6"></div>
+                  <h3 className="text-xl text-cyber-primary mb-2">
+                    Scanning Active Campaigns
+                  </h3>
+                  <p className="text-cyber-muted">
+                    Initializing security framework...
+                  </p>
+                </>
+              ) : campaigns.length === 0 ? (
+                <>
+                  <svg className="w-16 h-16 text-cyber-accent mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <h3 className="text-xl text-cyber-accent mb-2">
+                    No Active Operations
+                  </h3>
+                  <p className="text-cyber-muted">
+                    Deploy a phishing campaign to begin monitoring security events
+                  </p>
+                </>
+              ) : (
+                <>
+                  <svg className="w-16 h-16 text-cyber-secondary mx-auto mb-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                  </svg>
+                  <h3 className="text-xl text-cyber-primary mb-2">
+                    Select Target Campaign
+                  </h3>
+                  <p className="text-cyber-muted">
+                    Choose a campaign from the dropdown to view detailed analytics
+                  </p>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

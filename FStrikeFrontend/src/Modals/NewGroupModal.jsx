@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
-import { FaPlus, FaFileCsv, FaTrash, FaRobot } from "react-icons/fa";
+import { FaPlus, FaFileCsv, FaTrash, FaRobot, FaTimes, FaUsers, FaDownload, FaSearch, FaUser, FaEnvelope, FaBriefcase } from "react-icons/fa";
 import Papa from "papaparse";
 import * as XLSX from "xlsx";
 import AISearchModal from "./AISearchModal";
+import config from "../config/apiConfig";
 
 // Simple email validation regex function
 const isValidEmail = (email) => {
@@ -98,7 +99,7 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
     }
 
     try {
-      const response = await fetch("http://147.93.87.182:5000/api/SaveUserGroup", {
+      const response = await fetch(`${config.API_BASE_URL}/SaveUserGroup`, {
         method: editData?.id ? "PUT" : "POST",
         headers: {
           "Content-Type": "application/json",
@@ -260,52 +261,70 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
   if (!show) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Background overlay */}
-      <div
-        className="absolute inset-0 bg-gray-900 opacity-50"
-        onClick={onClose}
-      ></div>
-
-      {/* Modal content */}
-      <div className="relative bg-white rounded-lg shadow-lg w-full max-w-3xl p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/50">
+      <div className="glass-card w-full max-w-4xl mx-4 max-h-[90vh] overflow-hidden">
         {/* Header */}
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-3xl font-semibold">{editData ? 'Edit Group' : 'New Group'}</h2>
-          <button
-            className="text-gray-500 hover:text-gray-700 text-2xl leading-none"
-            onClick={onClose}
-          >
-            &times;
-          </button>
+        <div className="relative p-6 border-b border-cyber-primary/20">
+          <div className="absolute inset-0 bg-gradient-to-r from-cyber-primary/10 to-cyber-secondary/10"></div>
+          <div className="relative z-10 flex justify-between items-center">
+            <div className="flex items-center space-x-3">
+              <FaUsers className="text-cyber-primary text-2xl" />
+              <h2 className="text-2xl font-bold text-cyber-primary">
+                {editData ? "Edit Group" : "Create New Group"}
+              </h2>
+            </div>
+            <button 
+              onClick={onClose}
+              className="glass-button p-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
+            >
+              <FaTimes size={20} />
+            </button>
+          </div>
+          <p className="text-cyber-muted text-sm mt-2 relative z-10">
+            Create and manage user groups for targeted campaigns
+          </p>
         </div>
 
         {/* Body */}
-        <div>
+        <div className="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
           {/* Group Name */}
-          <div className="mb-4">
-            <label className="block font-medium mb-1">Name:</label>
+          <div>
+            <label className="block text-cyber-muted text-sm font-medium mb-2 flex items-center space-x-2">
+              <FaUsers />
+              <span>Group Name</span>
+            </label>
             <input
               type="text"
-              className="border border-gray-300 rounded px-2 py-1 w-full"
-              placeholder="Group name"
+              className="glass-select w-full px-4 py-3 rounded-lg"
+              placeholder="Enter group name"
               value={groupName}
               onChange={(e) => setGroupName(e.target.value)}
             />
           </div>
 
-          {/* Bulk Import & CSV Download */}
-          <div className="flex space-x-2 mb-4">
-            <button
-              className="flex items-center justify-center gap-2 bg-red-400 hover:bg-red-600 text-white px-4 py-2 cursor-pointer rounded"
-              onClick={handleBulkImportClick}
-            >
-              <FaPlus /> Bulk Import Users
-            </button>
-            <button className="flex items-center justify-center gap-2 text-gray-300 text-sm cursor-pointer px-4 py-2 rounded">
-              <FaFileCsv /> Download CSV Template
-            </button>
-            {/* Hidden file input */}
+          {/* Import Actions */}
+          <div className="glass-card p-4">
+            <h3 className="text-cyber-secondary font-medium mb-4">Import Options</h3>
+            <div className="flex flex-wrap gap-3">
+              <button
+                className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform"
+                onClick={handleBulkImportClick}
+              >
+                <FaPlus />
+                <span>Bulk Import Users</span>
+              </button>
+              <button className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform">
+                <FaDownload />
+                <span>Download CSV Template</span>
+              </button>
+              <button
+                className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 hover:scale-105 transition-transform"
+                onClick={() => setShowAISearch(true)}
+              >
+                <FaRobot />
+                <span>AI Search</span>
+              </button>
+            </div>
             <input
               type="file"
               ref={fileInputRef}
@@ -316,73 +335,65 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
           </div>
 
           {/* Add User Form */}
-          <div className="border p-4 rounded-md mb-4">
-            <h4 className="font-semibold mb-3">Add User</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-2">
+          <div className="glass-card p-4">
+            <h3 className="text-cyber-secondary font-medium mb-4 flex items-center space-x-2">
+              <FaUser />
+              <span>Add Individual User</span>
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
               <input
                 type="text"
                 placeholder="First Name"
-                className="border border-gray-300 p-2 rounded"
+                className="glass-select px-3 py-2 rounded-lg"
                 value={firstName}
                 onChange={(e) => setFirstName(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Last Name"
-                className="border border-gray-300 p-2 rounded"
+                className="glass-select px-3 py-2 rounded-lg"
                 value={lastName}
                 onChange={(e) => setLastName(e.target.value)}
               />
               <input
                 type="email"
                 placeholder="Email"
-                className="border border-gray-300 p-2 rounded"
+                className="glass-select px-3 py-2 rounded-lg"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
               <input
                 type="text"
                 placeholder="Position"
-                className="border border-gray-300 p-2 rounded"
+                className="glass-select px-3 py-2 rounded-lg"
                 value={position}
                 onChange={(e) => setPosition(e.target.value)}
               />
-              <div className="flex space-x-2">
-                <button
-                  className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded w-full flex items-center justify-center"
-                  onClick={handleAddUser}
-                >
-                  <FaPlus className="mr-1" /> Add
-                </button>
-                <button
-                  className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-2 rounded flex items-center justify-center"
-                  title="Use AI to find person or organization"
-                  onClick={() => setShowAISearch(true)}
-                >
-                  <FaRobot />
-                </button>
-              </div>
+              <button
+                className="glass-button px-4 py-2 rounded-lg flex items-center justify-center space-x-2 hover:scale-105 transition-transform"
+                onClick={handleAddUser}
+              >
+                <FaPlus />
+                <span>Add</span>
+              </button>
             </div>
           </div>
 
-          {/* Table Controls (Show X entries, Search) */}
-          <div className="flex justify-between items-center mb-2">
-            <div className="flex items-center">
+          {/* Table Controls */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-2 text-cyber-muted">
               <span>Show</span>
-              <select
-                className="mx-2 border border-gray-300 rounded px-1 py-1 text-sm w-16"
-                disabled
-              >
+              <select className="glass-select px-2 py-1 rounded text-sm w-16" disabled>
                 <option value="4">4</option>
               </select>
               <span>entries</span>
             </div>
-            <div className="flex items-center">
-              <span>Search:</span>
+            <div className="flex items-center space-x-2">
+              <FaSearch className="text-cyber-muted" />
               <input
                 type="text"
-                className="border border-gray-300 rounded px-2 py-1 ml-2 text-sm"
-                style={{ width: "200px" }}
+                className="glass-select px-3 py-2 rounded-lg w-64"
+                placeholder="Search users..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -393,15 +404,30 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
           </div>
 
           {/* Users Table */}
-          <div className="overflow-x-auto mb-4">
-            <table className="min-w-full border border-gray-300">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="p-2 border-b border-gray-300 text-left">First Name</th>
-                  <th className="p-2 border-b border-gray-300 text-left">Last Name</th>
-                  <th className="p-2 border-b border-gray-300 text-left">Email</th>
-                  <th className="p-2 border-b border-gray-300 text-left">Position</th>
-                  <th className="p-2 border-b border-gray-300 text-center">Actions</th>
+          <div className="data-table rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-cyber-primary/20">
+                  <th className="p-3 text-left text-cyber-primary font-medium">
+                    <div className="flex items-center space-x-2">
+                      <FaUser />
+                      <span>First Name</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-left text-cyber-primary font-medium">Last Name</th>
+                  <th className="p-3 text-left text-cyber-primary font-medium">
+                    <div className="flex items-center space-x-2">
+                      <FaEnvelope />
+                      <span>Email</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-left text-cyber-primary font-medium">
+                    <div className="flex items-center space-x-2">
+                      <FaBriefcase />
+                      <span>Position</span>
+                    </div>
+                  </th>
+                  <th className="p-3 text-center text-cyber-primary font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -409,14 +435,14 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
                   currentUsers.map((user, idx) => {
                     const userIndex = startIndex + idx;
                     return (
-                      <tr key={userIndex} className="border-b border-gray-300">
-                        <td className="p-2">{user.firstName}</td>
-                        <td className="p-2">{user.lastName}</td>
-                        <td className="p-2">{user.email}</td>
-                        <td className="p-2">{user.position}</td>
-                        <td className="p-2 text-center">
+                      <tr key={userIndex} className="border-b border-cyber-primary/10 hover:bg-cyber-primary/5">
+                        <td className="p-3 text-cyber-secondary">{user.firstName}</td>
+                        <td className="p-3 text-cyber-secondary">{user.lastName}</td>
+                        <td className="p-3 text-cyber-muted">{user.email}</td>
+                        <td className="p-3 text-cyber-muted">{user.position}</td>
+                        <td className="p-3 text-center">
                           <button
-                            className="text-red-500 hover:text-red-700"
+                            className="text-red-400 hover:text-red-300 p-2 rounded-lg hover:bg-red-400/10 transition-colors"
                             onClick={() => handleDeleteUser(userIndex)}
                           >
                             <FaTrash />
@@ -427,8 +453,8 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
                   })
                 ) : (
                   <tr>
-                    <td colSpan="5" className="p-2 text-center">
-                      No data available in table
+                    <td colSpan="5" className="p-8 text-center text-cyber-muted italic">
+                      No users added to this group yet
                     </td>
                   </tr>
                 )}
@@ -438,22 +464,22 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
 
           {/* Pagination */}
           {filteredUsers.length > 0 && (
-            <div className="flex justify-between items-center">
-              <div className="text-sm">
+            <div className="flex justify-between items-center text-cyber-muted text-sm">
+              <div>
                 Showing {startIndex + 1} to{" "}
                 {endIndex > filteredUsers.length ? filteredUsers.length : endIndex} of{" "}
                 {filteredUsers.length} entries
               </div>
-              <div className="space-x-2">
+              <div className="flex space-x-2">
                 <button
-                  className="border border-gray-300 px-2 py-1 rounded text-sm hover:bg-gray-100"
+                  className="glass-button px-3 py-1 rounded text-sm hover:scale-105 transition-transform"
                   onClick={handlePrevPage}
                   disabled={currentPage === 1}
                 >
                   Previous
                 </button>
                 <button
-                  className="border border-gray-300 px-2 py-1 rounded text-sm hover:bg-gray-100"
+                  className="glass-button px-3 py-1 rounded text-sm hover:scale-105 transition-transform"
                   onClick={handleNextPage}
                   disabled={currentPage === totalPages}
                 >
@@ -465,18 +491,21 @@ function NewGroupModal({ show, onClose, onSave, editData }) {
         </div>
 
         {/* Footer */}
-        <div className="mt-4 flex justify-end space-x-2">
+        <div className="flex justify-end space-x-3 border-t border-cyber-primary/20 px-6 py-4">
           <button
-            className="bg-gray-300 hover:bg-gray-400 text-gray-800 px-4 py-2 rounded cursor-pointer"
+            className="glass-button px-6 py-2 rounded-lg text-cyber-muted hover:text-cyber-primary"
             onClick={onClose}
           >
-            Close
+            Cancel
           </button>
           <button
-            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded cursor-pointer"
+            className="glass-button px-6 py-2 rounded-lg hover:scale-105 transition-transform"
             onClick={handleSaveChanges}
           >
-            Save changes
+            <div className="flex items-center space-x-2">
+              <FaUsers />
+              <span>{editData ? "Update Group" : "Save Group"}</span>
+            </div>
           </button>
         </div>
       </div>

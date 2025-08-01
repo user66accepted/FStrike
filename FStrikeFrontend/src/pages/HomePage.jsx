@@ -47,22 +47,22 @@ function HomePage() {
     };
 
     return (
-        <div className="flex h-screen">
-          {/* Fixed Header at the Top */}
-          <div className="w-full fixed top-0 left-0 z-50">
-            <Header />
-          </div>
+        <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, #0a0f14 0%, #1a252f 50%, #0d1b2a 100%)' }}>
+          {/* Fixed Header */}
+          <Header />
       
-          {/* Sidebar and Main Content Wrapper */}
-          <div className="flex flex-1 mt-16"> {/* Adjust margin-top to match header height */}
+          {/* Main Layout Container */}
+          <div className="flex pt-20"> {/* Add padding-top to account for fixed header */}
+            {/* Sidebar */}
             <Sidebar activeItem={activeItem} setActiveItem={setActiveItem} />
             
-            {/* Main Content - Avoids Header Overlap */}
-            <div className="flex-1 p-2">{renderModule()}</div>
+            {/* Main Content Area */}
+            <main className="flex-1 ml-80"> {/* Add left margin to account for sidebar width */}
+              {renderModule()}
+            </main>
           </div>
         </div>
       );
-      
 }
 
 export default HomePage;
