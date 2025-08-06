@@ -535,6 +535,35 @@ class GmailBrowserService extends EventEmitter {
           result = { success: true, title };
           break;
 
+        case 'key':
+          if (params.key) {
+            // Handle special keys
+            if (params.key === 'Enter') {
+              await page.keyboard.press('Enter');
+            } else if (params.key === 'Tab') {
+              await page.keyboard.press('Tab');
+            } else if (params.key === 'Backspace') {
+              await page.keyboard.press('Backspace');
+            } else if (params.key === 'Escape') {
+              await page.keyboard.press('Escape');
+            } else if (params.key.length === 1) {
+              // Regular character
+              await page.keyboard.type(params.key);
+            }
+            result = { success: true, message: `Pressed key: ${params.key}` };
+          }
+          break;
+
+        case 'focus':
+          if (params.selector) {
+            await page.focus(params.selector);
+            result = { success: true, message: 'Focused element' };
+          } else if (params.x && params.y) {
+            await page.mouse.click(params.x, params.y);
+            result = { success: true, message: 'Focused coordinates' };
+          }
+          break;
+
         default:
           result = { success: false, message: 'Unknown action' };
       }
