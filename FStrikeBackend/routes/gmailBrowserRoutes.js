@@ -46,6 +46,36 @@ router.get('/session/:sessionToken/screenshot', async (req, res) => {
 });
 
 /**
+ * GET /api/gmail-browser/session/:sessionToken/fast-screenshot
+ * Get optimized screenshot for high-frequency updates (10-20 fps)
+ */
+router.get('/session/:sessionToken/fast-screenshot', async (req, res) => {
+  try {
+    const { sessionToken } = req.params;
+    const screenshot = await gmailBrowserController.gmailBrowserService.getScreenshot(sessionToken, {
+      quality: 40, // Lower quality for speed
+      type: 'jpeg',
+      optimizeForSpeed: true
+    });
+
+    res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.setHeader('X-Screenshot-Quality', 'fast');
+    res.send(screenshot);
+
+  } catch (error) {
+    console.error('Error getting fast screenshot:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get screenshot',
+      error: error.message
+    });
+  }
+});
+
+/**
  * DELETE /api/gmail-browser/session/:sessionToken
  * Close browser session
  */

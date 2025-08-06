@@ -154,7 +154,11 @@ class GmailBrowserController {
       const { sessionToken } = req.params;
       const screenshot = await this.gmailBrowserService.getScreenshot(sessionToken);
 
-      res.setHeader('Content-Type', 'image/png');
+      // Set headers for JPEG and performance optimization
+      res.setHeader('Content-Type', 'image/jpeg');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.send(screenshot);
 
     } catch (error) {

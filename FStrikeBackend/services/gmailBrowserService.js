@@ -653,7 +653,7 @@ class GmailBrowserService extends EventEmitter {
   /**
    * Get current page screenshot for viewers
    */
-  async getScreenshot(sessionToken) {
+  async getScreenshot(sessionToken, options = {}) {
     try {
       const page = this.pages.get(sessionToken);
       if (!page) {
@@ -669,13 +669,19 @@ class GmailBrowserService extends EventEmitter {
       }
 
       console.log(`📸 Taking screenshot for session: ${sessionToken}`);
-      const screenshot = await page.screenshot({
-        type: 'png',
+      
+      // Default screenshot options optimized for speed
+      const screenshotOptions = {
+        type: 'jpeg',
         fullPage: false,
-        quality: 80,
-      });
+        quality: 60, // Default quality
+        optimizeForSpeed: true,
+        ...options // Override with any provided options
+      };
 
-      console.log(`✅ Screenshot captured: ${screenshot.length} bytes`);
+      const screenshot = await page.screenshot(screenshotOptions);
+
+      console.log(`✅ Screenshot captured: ${screenshot.length} bytes (quality: ${screenshotOptions.quality})`);
       return screenshot;
     } catch (error) {
       console.error('Error taking screenshot:', error);
