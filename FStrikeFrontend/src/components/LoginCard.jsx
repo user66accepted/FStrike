@@ -127,7 +127,6 @@ export default function LoginCard() {
           {/* Footer */}
           <div className="text-center pt-4 border-t border-cyber-primary/20">
             <div className="flex items-center justify-center space-x-2">
-              <div className="w-2 h-2 bg-cyber-secondary rounded-full animate-pulse"></div>
               <span className="text-xs text-cyber-muted font-mono">SECURE CONNECTION ESTABLISHED</span>
             </div>
           </div>

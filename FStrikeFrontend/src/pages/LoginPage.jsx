@@ -34,10 +34,9 @@ function LoginPage() {
                         />
                     </div>
                     <div className="text-center space-y-2">
-                        <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">F-Strike</h1>
+                        <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">C-Strike</h1>
                         <p className="text-cyber-muted max-w-md">Cyber Reconnaissance & Exploitation Platform</p>
                         <div className="flex items-center justify-center space-x-2 mt-4">
-                            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
                             <span className="text-xs text-cyber-muted font-mono">SYSTEM ONLINE</span>
                         </div>
                     </div>

@@ -26,7 +26,7 @@ const Header = () => {
             </div>
           </div>
           <div className="flex flex-col">
-            <h1 className="text-2xl font-bold text-cyber-primary tracking-tight">F-Strike</h1>
+            <h1 className="text-2xl font-bold text-cyber-primary tracking-tight">C-Strike</h1>
             <span className="text-xs text-cyber-muted tracking-wider uppercase">
               Security Framework v2.0
             </span>
@@ -38,7 +38,6 @@ const Header = () => {
           {/* System Clock */}
           <div className="text-sm text-cyber-muted">
             <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full status-indicator"></div>
               <span>{new Date().toLocaleTimeString()}</span>
             </div>
           </div>

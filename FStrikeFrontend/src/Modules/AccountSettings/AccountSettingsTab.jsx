@@ -27,7 +27,7 @@ const AccountSettingsTab = () => {
           <span>System Information</span>
         </h3>
         <div className="flex justify-between items-center py-3 border-b border-cyber-primary/20">
-          <span className="text-cyber-muted">F-Strike Version</span>
+          <span className="text-cyber-muted">C-Strike Version</span>
           <span className="text-cyber-primary font-mono">{ApolloStrikeVersion}</span>
         </div>
       </div>

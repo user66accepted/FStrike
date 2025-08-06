@@ -1,0 +1,437 @@
+/* Gmail Browser Control Styles */
+.gmail-browser-control {
+  border: 1px solid var(--cyber-border);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  background: rgba(10, 15, 20, 0.2);
+  transition: all 0.2s ease;
+}
+
+.gmail-browser-control:hover {
+  background: rgba(10, 15, 20, 0.3);
+}
+
+.gmail-session-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.gmail-session-badge.active {
+  background: rgba(34, 197, 94, 0.2);
+  color: rgb(74, 222, 128);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.gmail-session-badge.inactive {
+  background: rgba(239, 68, 68, 0.2);
+  color: rgb(248, 113, 113);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.gmail-session-badge.warning {
+  background: rgba(245, 158, 11, 0.2);
+  color: rgb(251, 191, 36);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.gmail-session-badge.success {
+  background: rgba(34, 197, 94, 0.2);
+  color: rgb(74, 222, 128);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+/* Glass Button and Card Styles */
+.glass-button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--cyber-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.glass-button:hover {
+  background: rgba(var(--cyber-primary-rgb), 0.2);
+  border-color: var(--cyber-primary);
+}
+
+.glass-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--cyber-border);
+  border-radius: 0.5rem;
+  backdrop-filter: blur(10px);
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid var(--cyber-border);
+  border-top: 2px solid var(--cyber-primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+/* Additional color classes for text */
+.text-green-400 {
+  color: rgb(74, 222, 128);
+}
+
+.text-red-400 {
+  color: rgb(248, 113, 113);
+}
+
+.text-gray-600 {
+  color: rgb(75, 85, 99);
+}
+
+.bg-green-500\/10 {
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.bg-green-500\/20 {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.border-green-500\/20 {
+  border-color: rgba(34, 197, 94, 0.2);
+}
+
+.bg-red-500\/20 {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.bg-red-500\/30 {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+/* Gmail Browser Modal Styles */
+.gmail-browser-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.gmail-browser-modal .modal-content {
+  background: var(--cyber-bg-primary);
+  border: 1px solid var(--cyber-border);
+  border-radius: 0.75rem;
+  width: 100%;
+  max-width: 112rem;
+  height: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.gmail-browser-modal .browser-screen {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: white;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.gmail-browser-modal .browser-canvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  cursor: crosshair;
+}
+
+.gmail-browser-modal .side-panel {
+  width: 20rem;
+  border-left: 1px solid var(--cyber-border);
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.gmail-browser-modal .side-panel > * + * {
+  margin-top: 1rem;
+}
+
+/* Status indicators */
+.status-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.status-dot.active {
+  background: rgb(74, 222, 128);
+}
+
+.status-dot.inactive {
+  background: rgb(248, 113, 113);
+}
+
+.status-dot.warning {
+  background: rgb(251, 191, 36);
+}
+
+/* Browser controls */
+.browser-controls {
+  padding: 1rem;
+  border-bottom: 1px solid var(--cyber-border);
+}
+
+.browser-address-bar {
+  flex: 1;
+  background: rgba(15, 25, 35, 0.85);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+}
+
+.browser-address-bar input {
+  width: 100%;
+  background: transparent;
+  color: var(--cyber-text-primary);
+  font-size: 0.875rem;
+  outline: none;
+}
+
+/* Credential capture styles */
+.credential-item {
+  background: rgba(15, 25, 35, 0.85);
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(34, 197, 94, 0.2);
+}
+
+.credential-timestamp {
+  font-size: 0.75rem;
+  color: rgb(74, 222, 128);
+  margin-bottom: 0.25rem;
+}
+
+/* Loading and error states */
+.gmail-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.gmail-loading .spinner {
+  animation: spin 1s linear infinite;
+  border-radius: 50%;
+  height: 2rem;
+  width: 2rem;
+  border: 2px solid transparent;
+  border-bottom-color: var(--cyber-primary);
+}
+
+/* Action buttons */
+.gmail-action-btn {
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0.1) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  color: var(--cyber-text-primary);
+}
+
+.gmail-action-btn:hover {
+  background: rgba(0, 212, 170, 0.2);
+  transform: scale(1.05);
+}
+
+.gmail-action-btn.danger {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.gmail-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.gmail-action-btn.success {
+  background: rgba(34, 197, 94, 0.2);
+}
+
+.gmail-action-btn.success:hover {
+  background: rgba(34, 197, 94, 0.3);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .gmail-browser-modal .modal-content {
+    max-width: 100%;
+    max-height: 100%;
+    border-radius: 0;
+  }
+  
+  .gmail-browser-modal .side-panel {
+    width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--cyber-border);
+    max-height: 16rem;
+  }
+  
+  .gmail-browser-modal .main-content {
+    flex-direction: column;
+  }
+}
+
+/* Animation keyframes */
+@keyframes pulse-green {
+  0%, 100% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.pulse-green {
+  animation: pulse-green 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Connection status indicator */
+.connection-status {
+  display: flex;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.connection-status > * + * {
+  margin-left: 0.5rem;
+}
+
+.connection-status.connected {
+  color: rgb(74, 222, 128);
+}
+
+.connection-status.disconnected {
+  color: rgb(248, 113, 113);
+}
+
+.connection-status.connecting {
+  color: rgb(251, 191, 36);
+}
+
+/* Browser screenshot container */
+.screenshot-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 0.5rem;
+}
+
+.screenshot-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.05);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+}
+
+.screenshot-container:hover .screenshot-overlay {
+  opacity: 1;
+}
+
+/* Quick actions panel */
+.quick-actions > * + * {
+  margin-top: 0.5rem;
+}
+
+.quick-actions button {
+  width: 100%;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  background: linear-gradient(135deg, 
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0.02) 50%,
+    rgba(0, 0, 0, 0.1) 100%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 212, 170, 0.2);
+  color: var(--cyber-text-primary);
+  transition: all 0.2s ease;
+}
+
+.quick-actions button:hover {
+  background: rgba(0, 212, 170, 0.1);
+}
+
+/* Session info display */
+.session-info > * + * {
+  margin-top: 0.5rem;
+}
+
+.session-info {
+  font-size: 0.875rem;
+}
+
+.session-info .info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.session-info .info-label {
+  color: var(--cyber-text-secondary);
+}
+
+.session-info .info-value {
+  color: var(--cyber-text-primary);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Notification styles for captured credentials */
+.credential-notification {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+  padding: 1rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+  z-index: 50;
+  animation: slideInRight 0.3s ease-out;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}

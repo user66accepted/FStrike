@@ -71,7 +71,6 @@ export default function SendingProfiles() {
       {/* Header Section */}
       <div className="mb-8">
         <div className="flex items-center space-x-4 mb-4">
-          <div className="w-3 h-3 bg-green-400 status-indicator"></div>
           <h1 className="text-4xl font-bold text-cyber-primary tracking-tight">
             SMTP Configuration
           </h1>
