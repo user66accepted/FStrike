@@ -15,7 +15,7 @@ class GmailBrowserService extends EventEmitter {
     this.pages = new Map(); // sessionToken -> page instance
     this.io = null; // Socket.IO instance
     this.browserOptions = {
-      headless: false, // We need visible browser for remote viewing
+      headless: 'new', // Use new headless mode for better compatibility
       devtools: false,
       defaultViewport: {
         width: 1366,
@@ -31,9 +31,47 @@ class GmailBrowserService extends EventEmitter {
         '--no-zygote',
         '--single-process',
         '--disable-gpu',
-        '--disable-features=VizDisplayCompositor',
+        '--disable-gpu-sandbox',
+        '--disable-software-rasterizer',
+        '--disable-background-timer-throttling',
+        '--disable-backgrounding-occluded-windows',
+        '--disable-renderer-backgrounding',
+        '--disable-features=TranslateUI,VizDisplayCompositor',
         '--window-size=1366,768',
-        '--remote-debugging-port=0', // Dynamic port allocation
+        '--virtual-time-budget=5000',
+        '--disable-ipc-flooding-protection',
+        '--disable-hang-monitor',
+        '--disable-prompt-on-repost',
+        '--disable-domain-reliability',
+        '--disable-web-security',
+        '--disable-features=VizDisplayCompositor',
+        '--run-all-compositor-stages-before-draw',
+        '--disable-threaded-animation',
+        '--disable-threaded-scrolling',
+        '--disable-checker-imaging',
+        '--disable-new-content-rendering-timeout',
+        '--disable-image-animation-resync',
+        '--disable-partial-raster',
+        '--disable-skia-runtime-opts',
+        '--disable-system-font-check',
+        '--disable-features=Translate',
+        '--no-pings',
+        '--no-crash-upload',
+        '--disable-crash-reporter',
+        '--disable-extensions',
+        '--disable-plugins',
+        '--disable-sync',
+        '--disable-translate',
+        '--hide-scrollbars',
+        '--mute-audio',
+        '--disable-background-media-suspend',
+        '--disable-notifications',
+        '--disable-default-apps',
+        '--disable-popup-blocking',
+        '--disable-infobars',
+        '--disable-session-crashed-bubble',
+        '--disable-password-generation',
+        '--disable-save-password-bubble'
       ],
     };
   }
@@ -53,11 +91,37 @@ class GmailBrowserService extends EventEmitter {
     try {
       console.log(`🌐 Creating Gmail browser session: ${sessionToken}`);
 
-      // Launch browser with remote debugging
-      const browser = await puppeteer.launch({
+      // Enhanced browser options for server environment
+      const browserOptions = {
         ...this.browserOptions,
         userDataDir: `./temp/browser-sessions/${sessionToken}`, // Persistent session
-      });
+        executablePath: process.env.CHROME_PATH || undefined, // Use system Chrome if available
+      };
+
+      // Launch browser with enhanced error handling
+      let browser;
+      try {
+        browser = await puppeteer.launch(browserOptions);
+      } catch (launchError) {
+        console.error('First browser launch failed, trying alternative config:', launchError.message);
+        
+        // Fallback configuration with minimal dependencies
+        const fallbackOptions = {
+          headless: 'new',
+          args: [
+            '--no-sandbox',
+            '--disable-setuid-sandbox',
+            '--disable-dev-shm-usage',
+            '--disable-gpu',
+            '--disable-web-security',
+            '--disable-features=VizDisplayCompositor',
+            '--single-process',
+            '--no-zygote'
+          ]
+        };
+        
+        browser = await puppeteer.launch(fallbackOptions);
+      }
 
       const page = await browser.newPage();
 
