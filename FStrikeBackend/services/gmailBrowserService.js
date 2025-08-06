@@ -38,7 +38,25 @@ class GmailBrowserService extends EventEmitter {
         '--disable-domain-reliability',
         '--no-first-run',
         '--disable-default-apps',
-        '--disable-sync'
+        '--disable-sync',
+        // Google automation detection bypass
+        '--disable-blink-features=AutomationControlled',
+        '--disable-automation',
+        '--disable-infobars',
+        '--disable-browser-side-navigation',
+        '--disable-features=TranslateUI',
+        '--disable-features=VizDisplayCompositor',
+        '--exclude-switches=enable-automation',
+        '--exclude-switches=enable-logging',
+        '--no-default-browser-check',
+        '--disable-popup-blocking',
+        '--disable-component-update',
+        '--disable-background-networking',
+        '--disable-client-side-phishing-detection',
+        '--disable-sync',
+        '--metrics-recording-only',
+        '--no-report-upload',
+        '--disable-crash-reporter'
       ],
     };
   }
@@ -66,11 +84,13 @@ class GmailBrowserService extends EventEmitter {
         fs.mkdirSync(sessionDir, { recursive: true });
       }
 
-      // Enhanced browser options for server environment
+      // Enhanced browser options for server environment (no debugging)
       const browserOptions = {
         ...this.browserOptions,
         userDataDir: sessionDir, // Persistent session
         executablePath: process.env.CHROME_PATH || undefined, // Use system Chrome if available
+        // Remove debugging options that Google detects
+        ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=AutomationControlled'],
       };
 
       // Launch browser with enhanced error handling
@@ -113,16 +133,68 @@ class GmailBrowserService extends EventEmitter {
         console.log(`📄 Page closed for session: ${sessionToken}`);
       });
 
-      // Set realistic user agent (don't set viewport to avoid errors)
+      // Set realistic user agent (Opera instead of Chrome to avoid detection)
       await page.setUserAgent(
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36'
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36 OPR/107.0.0.0'
       );
 
       // Add extra headers to look more like a real browser
       await page.setExtraHTTPHeaders({
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-        'Upgrade-Insecure-Requests': '1'
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-User': '?1',
+        'Sec-Fetch-Dest': 'document'
+      });
+
+      // Hide automation indicators with stealth script
+      await page.evaluateOnNewDocument(() => {
+        // Remove webdriver property
+        Object.defineProperty(navigator, 'webdriver', {
+          get: () => false,
+        });
+
+        // Mock chrome runtime
+        window.chrome = {
+          runtime: {},
+          loadTimes: function() {},
+          csi: function() {},
+        };
+
+        // Mock plugins
+        Object.defineProperty(navigator, 'plugins', {
+          get: () => [1, 2, 3, 4, 5],
+        });
+
+        // Mock languages
+        Object.defineProperty(navigator, 'languages', {
+          get: () => ['en-US', 'en'],
+        });
+
+        // Mock permissions
+        const originalQuery = window.navigator.permissions.query;
+        window.navigator.permissions.query = (parameters) => (
+          parameters.name === 'notifications' ?
+            Promise.resolve({ state: Notification.permission }) :
+            originalQuery(parameters)
+        );
+
+        // Remove automation traces
+        const originalMethod = Object.getOwnPropertyDescriptor(Navigator.prototype, 'webdriver');
+        if (originalMethod) {
+          delete Navigator.prototype.webdriver;
+        }
+
+        // Override toString for automation detection
+        const modifiedToString = Function.prototype.toString;
+        Function.prototype.toString = function() {
+          if (this === navigator.webdriver) {
+            return 'function webdriver() { [native code] }';
+          }
+          return modifiedToString.call(this);
+        };
       });
 
       // Enable request/response interception for credential capture
