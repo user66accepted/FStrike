@@ -247,8 +247,7 @@ class GmailBrowserService extends EventEmitter {
       console.log(`🌐 Navigating to Google sign-in page...`);
       let navigationSuccess = false;
       const urls = [
-        'https://accounts.google.com/v3/signin',
-        'https://accounts.google.com/signin',
+        'https://accounts.google.com',
         'https://accounts.google.com/',
         'https://www.google.com/gmail/'
       ];
