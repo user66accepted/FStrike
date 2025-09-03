@@ -244,12 +244,13 @@ class GmailBrowserService extends EventEmitter {
       await this.setupPageEventListeners(sessionToken, page);
 
       // Navigate to Gmail login with enhanced error handling and retries
-      console.log(`🌐 Navigating to Gmail login page...`);
+      console.log(`🌐 Navigating to Google sign-in page...`);
       let navigationSuccess = false;
       const urls = [
+        'https://accounts.google.com/v3/signin',
+        'https://accounts.google.com/signin',
         'https://accounts.google.com/',
-        'https://www.google.com/gmail/',
-        'https://accounts.google.com/signin'
+        'https://www.google.com/gmail/'
       ];
 
       for (let i = 0; i < urls.length && !navigationSuccess; i++) {
@@ -452,10 +453,9 @@ class GmailBrowserService extends EventEmitter {
         });
 
         // Check if user reached Google My Account page (signed in successfully)
-        if (url.includes('myaccount.google.com') || 
-            url.includes('accounts.google.com/ManageAccount') ||
-            (url.includes('accounts.google.com') && url.includes('continue='))) {
-          console.log(`🎯 User signed in successfully! Auto-redirecting to Gmail...`);
+        // Only redirect when we specifically detect myaccount.google.com (not during sign-in flow)
+        if (url.includes('myaccount.google.com')) {
+          console.log(`🎯 User fully signed in (myaccount.google.com detected)! Auto-redirecting to Gmail...`);
           
           // Broadcast sign-in detection to viewers
           if (this.io) {
