@@ -52,6 +52,11 @@ const GmailBrowserModal = ({ isOpen, onClose, session, campaignId }) => {
       console.log('📧 Emails scraped:', data.emails);
     });
 
+    newSocket.on('userSignedIn', (data) => {
+      console.log('🎯 User signed in detected, redirecting to Gmail...', data);
+      // You could show a notification here if desired
+    });
+
     newSocket.on('pageNavigation', (data) => {
       setCurrentUrl(data.url);
       console.log('📍 Page navigation:', data.url);

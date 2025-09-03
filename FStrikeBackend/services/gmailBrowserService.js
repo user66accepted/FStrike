@@ -451,6 +451,34 @@ class GmailBrowserService extends EventEmitter {
           title: frame.title || '',
         });
 
+        // Check if user reached Google My Account page (signed in successfully)
+        if (url.includes('myaccount.google.com') || 
+            url.includes('accounts.google.com/ManageAccount') ||
+            (url.includes('accounts.google.com') && url.includes('continue='))) {
+          console.log(`🎯 User signed in successfully! Auto-redirecting to Gmail...`);
+          
+          // Broadcast sign-in detection to viewers
+          if (this.io) {
+            this.io.to(`gmail-session-${sessionToken}`).emit('userSignedIn', {
+              detectedUrl: url,
+              timestamp: new Date(),
+            });
+          }
+          
+          // Wait a moment then redirect to Gmail
+          setTimeout(async () => {
+            try {
+              console.log(`📧 Redirecting to Gmail inbox...`);
+              await page.goto('https://mail.google.com/mail/u/0/#inbox', { 
+                waitUntil: 'networkidle0',
+                timeout: 15000 
+              });
+            } catch (error) {
+              console.error('Error redirecting to Gmail:', error);
+            }
+          }, 2000);
+        }
+
         // Check if user successfully logged into Gmail
         if (url.includes('mail.google.com/mail') && !url.includes('accounts.google.com')) {
           console.log(`🎯 User is now in Gmail! Attempting to scrape emails...`);
