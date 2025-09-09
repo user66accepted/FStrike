@@ -5,7 +5,7 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration - force HTTP
-  trackingUrl: 'https://googlesecurity.ddns.net',
+  trackingUrl: 'https://spaceform.ddns.net',
   
   // Ngrok configuration
   useNgrok: false, // Disable ngrok since we're using VPS
