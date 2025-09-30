@@ -38,18 +38,6 @@ db.get("PRAGMA table_info(WebsiteMirroringSessions)", (err, rows) => {
               }
             });
           }
-
-          const hasSessionType = columns.some(col => col.name === 'session_type');
-          if (!hasSessionType) {
-            console.log('Adding session_type column to WebsiteMirroringSessions table...');
-            db.run("ALTER TABLE WebsiteMirroringSessions ADD COLUMN session_type TEXT DEFAULT 'proxy'", (err) => {
-              if (err) {
-                console.error('Error adding session_type column:', err.message);
-              } else {
-                console.log('session_type column added successfully.');
-              }
-            });
-          }
         });
       }
     });
@@ -290,6 +278,7 @@ db.serialize(() => {
       session_token TEXT NOT NULL UNIQUE,
       target_url TEXT NOT NULL,
       proxy_port INTEGER NOT NULL,
+      session_type TEXT DEFAULT 'proxy',
       status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'error')),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       last_accessed DATETIME,
