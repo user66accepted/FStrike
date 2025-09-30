@@ -69,6 +69,22 @@ db.serialize(() => {
     )
   `);
 
+  // Gmail Browser Sessions table for storing bound URLs
+  db.run(`
+    CREATE TABLE IF NOT EXISTS GmailBrowserSessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_token TEXT NOT NULL UNIQUE,
+      campaign_id INTEGER NOT NULL,
+      bind_url TEXT,
+      tracking_id TEXT,
+      user_info TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      logged_in_at DATETIME,
+      last_activity DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
   // After creating tables, check if we need to create a default admin user
   db.get("SELECT COUNT(*) as count FROM Users", [], (err, row) => {
     if (err) {

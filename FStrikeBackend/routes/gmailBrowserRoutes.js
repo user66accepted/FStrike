@@ -131,6 +131,30 @@ router.get('/session/:sessionToken/hq-screenshot', async (req, res) => {
   await gmailBrowserController.getHighQualityScreenshot(req, res);
 });
 
+/**
+ * GET /api/gmail-browser/bound-sessions
+ * Get all bound Gmail sessions (optionally filtered by campaignId)
+ */
+router.get('/bound-sessions', async (req, res) => {
+  await gmailBrowserController.getBoundSessions(req, res);
+});
+
+/**
+ * GET /api/gmail-browser/:sessionToken
+ * Access Gmail session via bind URL
+ */
+router.get('/:sessionToken', async (req, res) => {
+  await gmailBrowserController.accessBoundSession(req, res);
+});
+
+/**
+ * POST /api/gmail-browser/session/:sessionToken/generate-bind-url
+ * Generate new bind URL for existing session
+ */
+router.post('/session/:sessionToken/generate-bind-url', async (req, res) => {
+  await gmailBrowserController.generateBindUrl(req, res);
+});
+
 // Export both router and controller for Socket.IO setup
 module.exports = {
   router,

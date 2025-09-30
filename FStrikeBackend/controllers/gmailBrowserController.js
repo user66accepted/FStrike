@@ -552,6 +552,133 @@ class GmailBrowserController {
       });
     });
   }
+
+  /**
+   * Get bound Gmail sessions
+   */
+  async getBoundSessions(req, res) {
+    try {
+      const { campaignId } = req.query;
+      const boundSessions = await this.gmailBrowserService.getBoundSessions(campaignId);
+      
+      res.json({
+        success: true,
+        sessions: boundSessions,
+        count: boundSessions.length
+      });
+
+    } catch (error) {
+      console.error('Error getting bound sessions:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get bound sessions',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Access Gmail session via bind URL
+   */
+  async accessBoundSession(req, res) {
+    try {
+      const { sessionToken } = req.params;
+      const { _fstrike_track } = req.query;
+      
+      if (!_fstrike_track) {
+        return res.status(400).json({
+          success: false,
+          message: 'Tracking ID is required'
+        });
+      }
+
+      // Verify session exists and tracking ID matches
+      const sessionInfo = await this.gmailBrowserService.getSessionByToken(sessionToken);
+      
+      if (!sessionInfo) {
+        return res.status(404).json({
+          success: false,
+          message: 'Session not found'
+        });
+      }
+
+      if (sessionInfo.tracking_id !== _fstrike_track) {
+        return res.status(403).json({
+          success: false,
+          message: 'Invalid tracking ID'
+        });
+      }
+
+      // Check if browser session is still active
+      const browserSession = this.gmailBrowserService.getSessionInfo(sessionToken);
+      
+      if (!browserSession) {
+        return res.status(404).json({
+          success: false,
+          message: 'Browser session is no longer active'
+        });
+      }
+
+      // Return session access page or redirect to viewer
+      res.json({
+        success: true,
+        session: {
+          sessionToken,
+          status: browserSession.isActive ? 'active' : 'inactive',
+          bindUrl: sessionInfo.bind_url,
+          createdAt: sessionInfo.created_at,
+          lastActivity: sessionInfo.last_activity
+        },
+        message: 'Session access granted'
+      });
+
+    } catch (error) {
+      console.error('Error accessing bound session:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to access session',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Generate new bind URL for existing session
+   */
+  async generateBindUrl(req, res) {
+    try {
+      const { sessionToken } = req.params;
+      
+      // Check if session exists
+      const sessionInfo = this.gmailBrowserService.getSessionInfo(sessionToken);
+      
+      if (!sessionInfo) {
+        return res.status(404).json({
+          success: false,
+          message: 'Session not found'
+        });
+      }
+
+      // Generate new bind URL
+      const { bindUrl, trackingId } = this.gmailBrowserService.generateBindUrl(sessionToken);
+      await this.gmailBrowserService.updateSessionBindUrl(sessionToken, bindUrl, trackingId);
+
+      res.json({
+        success: true,
+        bindUrl,
+        trackingId,
+        sessionToken
+      });
+
+    } catch (error) {
+      console.error('Error generating bind URL:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate bind URL',
+        error: error.message
+      });
+    }
+  }
 }
 
 module.exports = GmailBrowserController;

