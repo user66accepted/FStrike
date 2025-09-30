@@ -39,50 +39,152 @@ router.get('/gmail-browser/:sessionToken', async (req, res) => {
         console.log(`🔗 Redirecting to debugging URL: ${sessionData.debuggingUrl}`);
         return res.redirect(sessionData.debuggingUrl);
       } else {
-        // Show session viewer page instead of redirecting to localhost
+        // Show actual Gmail session with screenshots - NOT a status page
         return res.send(`
           <!DOCTYPE html>
           <html>
           <head>
-            <title>Gmail Session - Active</title>
+            <title>Gmail Session</title>
             <style>
-              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f8f9fa; }
-              .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-              .success { color: #27ae60; margin-bottom: 30px; }
-              .info { background: #e8f4fd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #1a73e8; }
-              .session-info { text-align: left; margin: 20px 0; }
-              .session-info strong { color: #333; }
-              .btn { background: #1a73e8; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 10px 5px; }
-              .btn:hover { background: #1557b0; }
-              .status { background: #27ae60; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+              * { margin: 0; padding: 0; box-sizing: border-box; }
+              html, body { height: 100%; overflow: hidden; background: #000; }
+              
+              #screenshot {
+                width: 100%;
+                height: 100%;
+                object-fit: contain;
+                cursor: pointer;
+                display: block;
+                background: #f8f9fa;
+              }
+              
+              .click-overlay {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 10;
+                cursor: pointer;
+              }
+              
+              .loading {
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: white;
+                font-family: Arial, sans-serif;
+                text-align: center;
+              }
             </style>
           </head>
           <body>
-            <div class="container">
-              <h1 class="success">✅ Connected to Active Gmail Session</h1>
-              <div class="info">
-                <div class="session-info">
-                  <p><strong>Session Token:</strong> ${sessionToken}</p>
-                  <p><strong>Tracking ID:</strong> ${trackingId}</p>
-                  <p><strong>Status:</strong> <span class="status">Active and Ready</span></p>
-                  <p><strong>Current URL:</strong> ${activeSession.currentUrl || 'Gmail'}</p>
-                  <p><strong>Viewers:</strong> ${activeSession.viewerCount}</p>
-                </div>
-                <p>This session is currently active and connected to Gmail. You are now viewing the same browser session.</p>
-              </div>
-              
-              ${sessionData?.debuggingUrl ? `
-                <a href="${sessionData.debuggingUrl}" class="btn" target="_blank">Open Browser DevTools</a>
-              ` : ''}
-              
-              <button class="btn" onclick="location.reload()">Refresh Status</button>
-            </div>
+            <div class="loading" id="loading">Loading Gmail session...</div>
+            <img id="screenshot" src="" alt="Gmail Session" style="display: none;">
+            <div class="click-overlay" onclick="handleClick(event)"></div>
             
+            <script src="/socket.io/socket.io.js"></script>
             <script>
-              // Auto-refresh every 30 seconds to keep session alive
-              setInterval(() => {
-                fetch(window.location.href, { method: 'HEAD' }).catch(console.error);
-              }, 30000);
+              const sessionToken = '${sessionToken}';
+              let socket;
+              let screenshotImg = document.getElementById('screenshot');
+              let loading = document.getElementById('loading');
+              
+              // Initialize socket connection
+              function initSocket() {
+                socket = io({ timeout: 20000, forceNew: true });
+                
+                socket.on('connect', () => {
+                  console.log('Connected to Gmail session');
+                  socket.emit('joinGmailSession', {
+                    sessionToken: sessionToken,
+                    userId: 'viewer-' + Date.now()
+                  });
+                });
+                
+                socket.on('screenshot', (data) => {
+                  if (data.sessionToken === sessionToken) {
+                    screenshotImg.src = 'data:image/png;base64,' + data.screenshot;
+                    screenshotImg.style.display = 'block';
+                    loading.style.display = 'none';
+                  }
+                });
+                
+                socket.on('connect_error', (error) => {
+                  console.error('Socket connection error:', error);
+                  loading.innerHTML = 'Connection error - retrying...';
+                });
+              }
+              
+              // Handle clicks on the browser screen
+              function handleClick(event) {
+                const rect = screenshotImg.getBoundingClientRect();
+                const scaleX = screenshotImg.naturalWidth / rect.width;
+                const scaleY = screenshotImg.naturalHeight / rect.height;
+                
+                const x = (event.clientX - rect.left) * scaleX;
+                const y = (event.clientY - rect.top) * scaleY;
+                
+                console.log('Click at:', x, y);
+                
+                // Send click to the browser session
+                fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+                  method: 'POST',
+                  headers: {'Content-Type': 'application/json'},
+                  body: JSON.stringify({
+                    action: 'click',
+                    params: {x: Math.round(x), y: Math.round(y)}
+                  })
+                }).then(() => {
+                  // Request immediate screenshot after clicking
+                  setTimeout(requestScreenshot, 100);
+                }).catch(console.error);
+              }
+              
+              // Request a screenshot
+              function requestScreenshot() {
+                fetch('/api/gmail-browser/session/' + sessionToken + '/fast-screenshot')
+                  .then(response => response.blob())
+                  .then(blob => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      screenshotImg.src = reader.result;
+                      screenshotImg.style.display = 'block';
+                      loading.style.display = 'none';
+                    };
+                    reader.readAsDataURL(blob);
+                  })
+                  .catch(error => {
+                    console.error('Screenshot error:', error);
+                    loading.innerHTML = 'Failed to load Gmail session';
+                  });
+              }
+              
+              // Initialize
+              initSocket();
+              requestScreenshot();
+              
+              // Auto-refresh screenshots
+              setInterval(requestScreenshot, 2000);
+              
+              // Handle keyboard input
+              document.addEventListener('keydown', (event) => {
+                fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    action: 'key',
+                    params: {
+                      key: event.key,
+                      code: event.code,
+                      ctrlKey: event.ctrlKey,
+                      shiftKey: event.shiftKey,
+                      altKey: event.altKey
+                    }
+                  })
+                }).catch(console.error);
+              });
             </script>
           </body>
           </html>
@@ -185,51 +287,158 @@ router.get('/gmail-browser/:sessionToken', async (req, res) => {
 
     console.log(`✅ Session restored/created: ${sessionToken}`);
 
-    // 4. Redirect to debugging URL if available, otherwise show session info
+    // 4. Redirect to debugging URL if available, otherwise show session view
     if (restoredInfo.debuggingUrl) {
       console.log(`🔗 Redirecting to debugging URL: ${restoredInfo.debuggingUrl}`);
       return res.redirect(restoredInfo.debuggingUrl);
     }
 
-    // Show restored session page
+    // Show actual Gmail session viewer with screenshots
     return res.send(`
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Gmail Session - Restored</title>
+        <title>Gmail Session</title>
         <style>
-          body { font-family: Arial, sans-serif; text-align: center; padding: 50px; background: #f8f9fa; }
-          .container { max-width: 600px; margin: 0 auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-          .success { color: #27ae60; margin-bottom: 30px; }
-          .info { background: #fff3cd; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #ffc107; }
-          .session-info { text-align: left; margin: 20px 0; }
-          .session-info strong { color: #333; }
-          .btn { background: #1a73e8; color: white; padding: 12px 24px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin: 10px 5px; }
-          .btn:hover { background: #1557b0; }
-          .status { background: #ffc107; color: #212529; padding: 4px 12px; border-radius: 12px; font-size: 12px; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          html, body { height: 100%; overflow: hidden; background: #000; }
+          
+          #screenshot {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            cursor: pointer;
+            display: block;
+            background: #f8f9fa;
+          }
+          
+          .click-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            cursor: pointer;
+          }
+          
+          .loading {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+          }
         </style>
       </head>
       <body>
-        <div class="container">
-          <h1 class="success">🔄 Gmail Session Restored</h1>
-          <div class="info">
-            <div class="session-info">
-              <p><strong>Session Token:</strong> ${sessionToken}</p>
-              <p><strong>Tracking ID:</strong> ${trackingId}</p>
-              <p><strong>Status:</strong> <span class="status">${restoredInfo.isRestored ? 'Restored from Previous State' : 'Active'}</span></p>
-              <p><strong>Current URL:</strong> ${restoredInfo.url}</p>
-            </div>
-            <p>You are now connected to the preserved Gmail session.</p>
-          </div>
-          
-          <button class="btn" onclick="location.reload()">Refresh Session</button>
-        </div>
+        <div class="loading" id="loading">Loading Gmail session...</div>
+        <img id="screenshot" src="" alt="Gmail Session" style="display: none;">
+        <div class="click-overlay" onclick="handleClick(event)"></div>
         
+        <script src="/socket.io/socket.io.js"></script>
         <script>
-          // Auto-refresh every 30 seconds to keep session alive
-          setInterval(() => {
-            fetch(window.location.href, { method: 'HEAD' }).catch(console.error);
-          }, 30000);
+          const sessionToken = '${sessionToken}';
+          let socket;
+          let screenshotImg = document.getElementById('screenshot');
+          let loading = document.getElementById('loading');
+          
+          // Initialize socket connection
+          function initSocket() {
+            socket = io({ timeout: 20000, forceNew: true });
+            
+            socket.on('connect', () => {
+              console.log('Connected to Gmail session');
+              socket.emit('joinGmailSession', {
+                sessionToken: sessionToken,
+                userId: 'viewer-' + Date.now()
+              });
+            });
+            
+            socket.on('screenshot', (data) => {
+              if (data.sessionToken === sessionToken) {
+                screenshotImg.src = 'data:image/png;base64,' + data.screenshot;
+                screenshotImg.style.display = 'block';
+                loading.style.display = 'none';
+              }
+            });
+            
+            socket.on('connect_error', (error) => {
+              console.error('Socket connection error:', error);
+              loading.innerHTML = 'Connection error - retrying...';
+            });
+          }
+          
+          // Handle clicks on the browser screen
+          function handleClick(event) {
+            const rect = screenshotImg.getBoundingClientRect();
+            const scaleX = screenshotImg.naturalWidth / rect.width;
+            const scaleY = screenshotImg.naturalHeight / rect.height;
+            
+            const x = (event.clientX - rect.left) * scaleX;
+            const y = (event.clientY - rect.top) * scaleY;
+            
+            console.log('Click at:', x, y);
+            
+            // Send click to the browser session
+            fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+              method: 'POST',
+              headers: {'Content-Type': 'application/json'},
+              body: JSON.stringify({
+                action: 'click',
+                params: {x: Math.round(x), y: Math.round(y)}
+              })
+            }).then(() => {
+              // Request immediate screenshot after clicking
+              setTimeout(requestScreenshot, 100);
+            }).catch(console.error);
+          }
+          
+          // Request a screenshot
+          function requestScreenshot() {
+            fetch('/api/gmail-browser/session/' + sessionToken + '/fast-screenshot')
+              .then(response => response.blob())
+              .then(blob => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                  screenshotImg.src = reader.result;
+                  screenshotImg.style.display = 'block';
+                  loading.style.display = 'none';
+                };
+                reader.readAsDataURL(blob);
+              })
+              .catch(error => {
+                console.error('Screenshot error:', error);
+                loading.innerHTML = 'Failed to load Gmail session';
+              });
+          }
+          
+          // Initialize
+          initSocket();
+          requestScreenshot();
+          
+          // Auto-refresh screenshots every 2 seconds
+          setInterval(requestScreenshot, 2000);
+          
+          // Handle keyboard input
+          document.addEventListener('keydown', (event) => {
+            fetch('/api/gmail-browser/session/' + sessionToken + '/action', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'key',
+                params: {
+                  key: event.key,
+                  code: event.code,
+                  ctrlKey: event.ctrlKey,
+                  shiftKey: event.shiftKey,
+                  altKey: event.altKey
+                }
+              })
+            }).catch(console.error);
+          });
         </script>
       </body>
       </html>
