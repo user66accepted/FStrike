@@ -158,7 +158,7 @@ const Dashboard = () => {
     if (!selectedCampaign) return;
     
     try {
-      const response = await httpClient.get(`/api/gmail-browser/bound-sessions?campaignId=${selectedCampaign.id}`);
+      const response = await httpClient.get(`/gmail-browser/bound-sessions?campaignId=${selectedCampaign.id}`);
       setGmailSessions(response.data.sessions || []);
     } catch (error) {
       console.error("Error fetching bound Gmail sessions:", error);
@@ -179,7 +179,7 @@ const Dashboard = () => {
       
       // Generate a simple session token (in production, this should be done server-side)
       const sessionToken = Math.random().toString(36).substring(2) + Date.now().toString(36);
-      const response = await httpClient.post('/api/gmail-browser/create-session', {
+      const response = await httpClient.post('/gmail-browser/create-session', {
         sessionToken,
         campaignId: selectedCampaign.id,
         screenWidth,
