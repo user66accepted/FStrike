@@ -9,39 +9,71 @@ const db = new sqlite3.Database('./database.db', (err) => {
   }
 });
 
-// Migration: Check and add proxy_port column to WebsiteMirroringSessions if it doesn't exist
-db.get("PRAGMA table_info(WebsiteMirroringSessions)", (err, rows) => {
-  if (!err) {
-    // Check if the table exists first
+// Migration: Check and add missing columns to WebsiteMirroringSessions if they don't exist
+const addMissingColumns = () => {
+  return new Promise((resolve) => {
     db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='WebsiteMirroringSessions'", (err, tableExists) => {
-      if (err) {
-        console.error('Error checking if WebsiteMirroringSessions table exists:', err.message);
+      if (err || !tableExists) {
+        resolve(); // Table doesn't exist yet, will be created with correct schema
         return;
       }
       
-      if (tableExists) {
-        // Table exists, check if the column exists
-        db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
-          if (err) {
-            console.error('Error checking WebsiteMirroringSessions columns:', err.message);
-            return;
-          }
+      // Table exists, check for missing columns
+      db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
+        if (err) {
+          console.error('Error checking WebsiteMirroringSessions columns:', err.message);
+          resolve();
+          return;
+        }
 
-          const hasProxyPort = columns.some(col => col.name === 'proxy_port');
-          if (!hasProxyPort) {
-            console.log('Adding proxy_port column to WebsiteMirroringSessions table...');
-            db.run("ALTER TABLE WebsiteMirroringSessions ADD COLUMN proxy_port INTEGER", (err) => {
-              if (err) {
-                console.error('Error adding proxy_port column:', err.message);
-              } else {
-                console.log('proxy_port column added successfully.');
-              }
-            });
+        const hasProxyPort = columns.some(col => col.name === 'proxy_port');
+        const hasSessionType = columns.some(col => col.name === 'session_type');
+        
+        let pendingOperations = 0;
+        const completeOperation = () => {
+          pendingOperations--;
+          if (pendingOperations === 0) {
+            resolve();
           }
-        });
-      }
+        };
+
+        if (!hasProxyPort) {
+          pendingOperations++;
+          console.log('Adding proxy_port column to WebsiteMirroringSessions table...');
+          db.run("ALTER TABLE WebsiteMirroringSessions ADD COLUMN proxy_port INTEGER", (err) => {
+            if (err) {
+              console.error('Error adding proxy_port column:', err.message);
+            } else {
+              console.log('proxy_port column added successfully.');
+            }
+            completeOperation();
+          });
+        }
+
+        if (!hasSessionType) {
+          pendingOperations++;
+          console.log('Adding session_type column to WebsiteMirroringSessions table...');
+          db.run("ALTER TABLE WebsiteMirroringSessions ADD COLUMN session_type TEXT DEFAULT 'proxy'", (err) => {
+            if (err) {
+              console.error('Error adding session_type column:', err.message);
+            } else {
+              console.log('session_type column added successfully.');
+            }
+            completeOperation();
+          });
+        }
+
+        if (pendingOperations === 0) {
+          resolve(); // No operations needed
+        }
+      });
     });
-  }
+  });
+};
+
+// Run migration before creating tables
+addMissingColumns().then(() => {
+  console.log('Database migration check completed.');
 });
 
 // Create tables if they do not exist

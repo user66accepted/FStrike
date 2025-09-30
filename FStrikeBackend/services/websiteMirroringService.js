@@ -2173,16 +2173,33 @@ class WebsiteMirroringService {
         
         // Create session in database with special type
         const sessionId = await new Promise((resolve, reject) => {
-          db.run(
-            `INSERT INTO WebsiteMirroringSessions 
-             (campaign_id, target_url, session_token, status, proxy_port, session_type) 
-             VALUES (?, ?, ?, ?, ?, ?)`,
-            [campaignId, normalizedUrl, sessionToken, 'active', 0, 'gmail_browser'],
-            function(err) {
+          // First check if session_type column exists
+          db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+
+            const hasSessionType = columns.some(col => col.name === 'session_type');
+            
+            let query, params;
+            if (hasSessionType) {
+              query = `INSERT INTO WebsiteMirroringSessions 
+                       (campaign_id, target_url, session_token, status, proxy_port, session_type) 
+                       VALUES (?, ?, ?, ?, ?, ?)`;
+              params = [campaignId, normalizedUrl, sessionToken, 'active', 0, 'gmail_browser'];
+            } else {
+              query = `INSERT INTO WebsiteMirroringSessions 
+                       (campaign_id, target_url, session_token, status, proxy_port) 
+                       VALUES (?, ?, ?, ?, ?)`;
+              params = [campaignId, normalizedUrl, sessionToken, 'active', 0];
+            }
+
+            db.run(query, params, function(err) {
               if (err) reject(err);
               else resolve(this.lastID);
-            }
-          );
+            });
+          });
         });
 
         // Return special Gmail session info
