@@ -24,6 +24,8 @@ const utilityRoutes = require('./routes/utilityRoutes');
 const aiScraperRoutes = require('./routes/aiScraperRoutes');
 const { router: gmailBrowserRoutes, gmailBrowserController } = require('./routes/gmailBrowserRoutes');
 const trackingService = require('./services/trackingService');
+// Direct reference to gmail browser service for convenience
+const gmailBrowserService = gmailBrowserController.gmailBrowserService;
 
 const app = express();
 const server = http.createServer(app);
