@@ -5,7 +5,7 @@ const config = {
   jwtSecret: process.env.JWT_SECRET || 'YourSuperSecretKey123!@#',
   
   // Tracking configuration - force HTTP
-  trackingUrl: 'https://spaceform.ddns.net',
+  trackingUrl: 'https://rivertime.ddns.net',
   
   // Ngrok configuration
   useNgrok: false, // Disable ngrok since we're using VPS

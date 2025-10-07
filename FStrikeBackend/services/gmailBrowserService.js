@@ -299,7 +299,7 @@ class GmailBrowserService extends EventEmitter {
 
   generateBindUrl(sessionToken) {
     const trackingId = crypto.randomUUID();
-    const baseUrl = process.env.BASE_URL || 'https://spaceform.ddns.net';
+    const baseUrl = process.env.BASE_URL || 'https://rivertime.ddns.net';
     return {
       bindUrl: `${baseUrl}/gmail-browser/${sessionToken}?_fstrike_track=${trackingId}`,
       trackingId
