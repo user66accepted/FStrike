@@ -743,7 +743,8 @@ const processLandingPageHtml = (html, campaignId, landingPageId) => {
       $(this).removeAttr('target');
       $(this).removeAttr('enctype');
 
-      // Set our form attributes
+      // Set our form submission endpoint
+      $(this).attr('action', `${baseUrl}/submit-form/${campaignId}/${landingPageId}`);
       $(this).attr('method', 'post');
       $(this).attr('enctype', 'application/x-www-form-urlencoded');
 
