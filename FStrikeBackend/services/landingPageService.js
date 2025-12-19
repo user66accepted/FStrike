@@ -546,10 +546,10 @@ const getCampaignClicks = (campaignId) => {
 
       // Table exists, get the data
       db.all(
-        `SELECT ip_address, user_agent, created_at
+        `SELECT ip_address, user_agent, timestamp as created_at
          FROM link_clicks
          WHERE campaign_id = ?
-         ORDER BY created_at DESC`,
+         ORDER BY timestamp DESC`,
         [campaignId],
         (err, rows) => {
           if (err) reject(err);
